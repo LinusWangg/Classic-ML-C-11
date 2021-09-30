@@ -88,6 +88,7 @@ def trainStandardBP(features, labels, rate):
     plt.ylabel("loss")
     plt.plot(all_loss)
     plt.show()
+    return net
 
 def trainAccumlateBP(features, labels, rate):
     net = Net()
@@ -106,8 +107,10 @@ def trainAccumlateBP(features, labels, rate):
     plt.ylabel("loss")
     plt.plot(all_loss)
     plt.show()
+    return net
     
 
 
-trainAccumlateBP(features,labels,0.2)
-
+net = trainAccumlateBP(features,labels,0.2)
+X=features[:,-1]
+print(net.forward(X.reshape(-1,1)))
