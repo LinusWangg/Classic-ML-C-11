@@ -24,7 +24,7 @@ def sigmoid(x):
         return np.exp(x) / (1+np.exp(x))
 
 def back_sigmoid(x):
-    return x*(1-x)
+    return sigmoid(x)*sigmoid(1-x)
 
 def tanh(x):
     return np.tanh(x)
@@ -104,6 +104,10 @@ class Net:
             self.dB_Squar[i] = 0.9*self.dB_Squar[i] + 0.1*dB_Squar
             self.W[i] -= lr * (1 / (np.sqrt(self.dW_Squar[i]) + eps)) * self.dW[i]
             self.B[i] -= lr * (1 / (np.sqrt(self.dB_Squar[i]) + eps)) * self.dB[i]
+
+    def miniBatchGD(self, lr, eps, batchSize):
+        split_X = np.split(self.A[0])
+
     
     def predict(self, input):
         Z = [0,0,0,0]
