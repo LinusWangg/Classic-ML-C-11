@@ -48,7 +48,7 @@ def main():
 
     for i in range(step):
         prob = np.random.uniform(0.0, 1.0)
-        if prob > 0.01:
+        if prob > 0.1:
             maxn, maxnindex = findbest(q2)
         else:
             choice = np.random.randint(0, k-1)
@@ -59,7 +59,7 @@ def main():
         if maxnindex2 == maxnindex:
             eps2_accT += 1
         n2[maxnindex] += 1
-        q2[maxnindex] = q2[maxnindex] + (1 / n2[maxnindex])*(maxn - q2[maxnindex])
+        q2[maxnindex] = q2[maxnindex] + 0.1*(maxn - q2[maxnindex])
         eps2_total += maxn
         eps2_avg.append(eps2_total / (i + 1))
         eps2_acc.append(eps2_accT / (i + 1))
