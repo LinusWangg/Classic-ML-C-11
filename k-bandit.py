@@ -11,7 +11,7 @@ def findbest(q):
     return maxn, action
 
 def addGauss(q):
-    q += 0.1 * np.random.randn(10)
+    q += 0.01 * np.random.randn(10)
 
 def main():
     q1 = np.zeros((10))
@@ -71,7 +71,7 @@ acc1, avg1, acc2, avg2 = main()
 x = np.array([np.arange(0,40000,1)])
 x = x.transpose()
 
-plt.plot(x, acc1, 'b')
-plt.plot(x, acc2, 'g')
+plt.plot(x, avg1, 'b')
+plt.plot(x, avg2, 'g')
 plt.show()
 
