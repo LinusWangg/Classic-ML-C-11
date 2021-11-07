@@ -18,6 +18,7 @@ class GirdWindow(QWidget):
         self.S = []
         self.A = []
         self.A_index = []
+        self.A_prob = []
         self.R = []
         self.step = 0
         
@@ -29,6 +30,7 @@ class GirdWindow(QWidget):
 
         self.Q = np.zeros((36, 36, 9))
         self.C = np.zeros((36, 36, 9))
+        self.value = np.zeros((36, 36))
         self.pi = np.random.randint(0, 9, (36, 36), dtype=int)
 
         for x in range(36):
@@ -49,7 +51,7 @@ class GirdWindow(QWidget):
         self.grid_layout.addWidget(getgreens, 0, 50)
 
         generate = QPushButton("generate")
-        generate.clicked.connect(lambda:self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.3))
+        generate.clicked.connect(lambda:self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.1))
         generate.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
         self.grid_layout.addWidget(generate, 2, 50)
 
@@ -57,6 +59,16 @@ class GirdWindow(QWidget):
         showGenerate.clicked.connect(lambda:self.showGenerate())
         generate.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
         self.grid_layout.addWidget(showGenerate, 4, 50)
+
+        train = QPushButton("train")
+        train.clicked.connect(lambda:self.train(0.9, 10000))
+        train.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
+        self.grid_layout.addWidget(train, 6, 50)
+
+        remake = QPushButton("remake")
+        remake.clicked.connect(lambda:self.remake())
+        remake.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
+        self.grid_layout.addWidget(remake, 8, 50)
         
         self.grid_layout.setSpacing(0)
         self.grid_layout.setVerticalSpacing(0)
@@ -111,7 +123,7 @@ class GirdWindow(QWidget):
             ratio = abs(act[1] / act[0])
             t0 = act[0] / abs(act[0])
             t1 = act[1] / abs(act[1])
-            for i in np.arange(0, abs(act[0]), 0.1):
+            for i in np.arange(0, abs(act[0])+0.1, 0.1):
                 x = math.floor(loc[0]+i*t0)
                 y = math.floor(loc[1]+i*ratio*t1)
                 if self.state[x][y] == 0:
@@ -147,7 +159,7 @@ class GirdWindow(QWidget):
             ratio = abs(act[1] / act[0])
             t0 = act[0] / abs(act[0])
             t1 = act[1] / abs(act[1])
-            for i in np.arange(0, abs(act[0]), 0.1):
+            for i in np.arange(0, abs(act[0])+0.1, 0.1):
                 x = math.floor(loc[0]+i*t0)
                 y = math.floor(loc[1]+i*ratio*t1)
                 if self.boundray(x, y):
@@ -156,6 +168,26 @@ class GirdWindow(QWidget):
 
         return
     
+    def remake(self):
+        font = QtGui.QFont()
+        font.setFamily("Arial") #括号里可以设置成自己想要的其它字体
+        font.setPointSize(1)   #括号里的数字可以设置成自己想要的字体大小
+        for x in range(36):
+            for y in range(36):
+                self.buttons[(x, y)].setText(str(x)+","+str(y))
+                self.buttons[(x, y)].setFont(font)
+
+    def showvalue(self, eps):
+        font = QtGui.QFont()
+        font.setFamily("Arial") #括号里可以设置成自己想要的其它字体
+        font.setPointSize(18)   #括号里的数字可以设置成自己想要的字体大小
+        Qmax = np.max(self.Q, axis=2)
+        Qtotal = np.average(self.Q, axis=2)*9
+        for x in range(36):
+            for y in range(36):
+                self.value[x][y] = (1-eps)*Qmax[x][y] + eps/9*(Qtotal[x][y]-Qmax[x][y])
+
+
     def generateActionList(self, action, pi, x, y, eps):
         now_state = 2
         now_xmove = 0
@@ -164,6 +196,7 @@ class GirdWindow(QWidget):
         A = []
         R = []
         A_index = []
+        A_prob = []
         now_x = x
         now_y = y
         S.append([x, y])
@@ -173,7 +206,7 @@ class GirdWindow(QWidget):
             a_usable_index = []
             final_a = []
             final_a_index = 0
-            for i in len(action):
+            for i in range(len(action)):
                 if abs(action[i][0]+now_xmove)>4 or abs(action[i][1]+now_ymove)>4 or (action[i][0]+now_xmove==0 and action[i][1]+now_ymove==0):
                     ASt -= 1
                 else:
@@ -184,9 +217,11 @@ class GirdWindow(QWidget):
                 rand_a = np.random.randint(0, len(a_usable)-1)
                 final_a_index = a_usable_index[rand_a]
                 final_a = a_usable[rand_a]
+                A_prob.append(eps/ASt)
             else:
                 final_a_index = pi[now_x, now_y]
                 final_a = action[pi[now_x, now_y]]
+                A_prob.append(1-eps+eps/ASt)
 
             now_xmove += final_a[0]
             now_ymove += final_a[1]
@@ -217,15 +252,16 @@ class GirdWindow(QWidget):
                 self.S = S
                 self.A = A
                 self.R = R
+                self.A_prob = A_prob
                 self.A_index = A_index
                 break
             elif cod == 0:
                 R.append(-1)
                 S.append([now_x, now_y])
-        print(S, A, R, A_index)
+        #print(S, A, R)
         return
 
-    def train(self, gamma):
+    def MC_control(self, gamma):
         G = 0
         W = 1
         T = len(self.S)-1
@@ -234,7 +270,17 @@ class GirdWindow(QWidget):
             G = gamma*G+self.R[index]
             self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=W
             self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=(W/self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]])*(G-self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]])
-            self.pi[self.S[index][0]][self.S[index][1]]=
+            self.pi[self.S[index][0]][self.S[index][1]]=np.argmax(self.Q, axis=2)[self.S[index][0]][self.S[index][1]]
+            if self.A_index[index]!=self.pi[self.S[index][0]][self.S[index][1]]:
+                return
+            W = W*(1/self.A_prob[index])
+
+    def train(self, gamma, epoch):
+        for i in range(epoch):
+            print(i)
+            self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.1)
+            self.MC_control(gamma)
+            self.showvalue(0.1)
     
     def showGenerate(self):
         for s in self.S:
