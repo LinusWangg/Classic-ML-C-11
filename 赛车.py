@@ -17,7 +17,9 @@ class GirdWindow(QWidget):
         self.buttons = {}
         self.S = []
         self.A = []
+        self.A_index = []
         self.R = []
+        self.step = 0
         
         font = QtGui.QFont()
         font.setFamily("Arial") #括号里可以设置成自己想要的其它字体
@@ -47,7 +49,7 @@ class GirdWindow(QWidget):
         self.grid_layout.addWidget(getgreens, 0, 50)
 
         generate = QPushButton("generate")
-        generate.clicked.connect(lambda:self.generateActionList(self.action, self.pi, 1, 1, 0.1))
+        generate.clicked.connect(lambda:self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.3))
         generate.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
         self.grid_layout.addWidget(generate, 2, 50)
 
@@ -86,42 +88,72 @@ class GirdWindow(QWidget):
         return
     
     def judge(self, loc, act):
+        if act[0] == 0 and act[1] == 0:
+            return 0
+        
         if act[0] == 0:
-            for i in range(1, act[1]+1):
-                if self.state[loc[0]][loc[1]+i] == 0:
+            t1 = act[1] // abs(act[1])
+            for i in range(1, abs(act[1])+1):
+                if self.state[loc[0]][loc[1]+i*t1] == 0:
                     return 1
-                if self.state[loc[0]][loc[1]+i] == 3:
+                if self.state[loc[0]][loc[1]+i*t1] == 3:
                     return 2
-        elif act[1] == 0:
-            for i in range(1, act[0]+1):
-                if self.state[loc[0]+i][loc[1]] == 0:
+        
+        if act[1] == 0:
+            t0 = act[0] // abs(act[0])
+            for i in range(1, abs(act[0])+1):
+                if self.state[loc[0]+i*t0][loc[1]] == 0:
                     return 1
-                if self.state[loc[0]+i][loc[1]] == 3:
+                if self.state[loc[0]+i*t0][loc[1]] == 3:
                     return 2
-        else:
-            ratio = act[1] / act[0]
-            for i in np.arange(0, act[0], 0.1):
-                x = math.floor(loc[0]+i)
-                y = math.floor(loc[1]+i*ratio)
+        
+        if act[0] != 0 and act[1] != 0:
+            ratio = abs(act[1] / act[0])
+            t0 = act[0] / abs(act[0])
+            t1 = act[1] / abs(act[1])
+            for i in np.arange(0, abs(act[0]), 0.1):
+                x = math.floor(loc[0]+i*t0)
+                y = math.floor(loc[1]+i*ratio*t1)
                 if self.state[x][y] == 0:
                     return 1
                 if self.state[x][y] == 3:
                     return 2
         return 0
 
+    def boundray(self, x, y):
+        if x<0 or x>35 or y<0 or y>35:
+            return True
+        return False
+
     def draw(self, loc, act):
+        if act[0] == 0 and act[1] == 0:
+            return
+        
         if act[0] == 0:
-            for i in range(1, act[1]+1):
-                self.buttons[(loc[0], loc[1]+i)].setStyleSheet("min-height:30px;min-width:30px; max-width:30px;max-height:30px;background-color:purple;")
-        elif act[1] == 0:
+            t1 = act[1] // abs(act[1])
+            for i in range(1, abs(act[1])+1):
+                if self.boundray(loc[0], loc[1]+i*t1):
+                    return
+                self.buttons[(loc[0], loc[1]+i*t1)].setStyleSheet("min-height:30px;min-width:30px; max-width:30px;max-height:30px;background-color:purple;")
+
+        if act[1] == 0:
+            t0 = act[0] // abs(act[0])
             for i in range(1, act[0]+1):
-                self.buttons[(loc[0]+i, loc[1])].setStyleSheet("min-height:30px;min-width:30px; max-width:30px;max-height:30px;background-color:purple;")
-        else:
-            ratio = act[1] / act[0]
-            for i in np.arange(0, act[0], 0.1):
-                x = math.floor(loc[0]+i)
-                y = math.floor(loc[1]+i*ratio)
+                if self.boundray(loc[0]+i*t0, loc[1]):
+                    return
+                self.buttons[(loc[0]+i*t0, loc[1])].setStyleSheet("min-height:30px;min-width:30px; max-width:30px;max-height:30px;background-color:purple;")
+        
+        if act[0] != 0 and act[1] != 0:
+            ratio = abs(act[1] / act[0])
+            t0 = act[0] / abs(act[0])
+            t1 = act[1] / abs(act[1])
+            for i in np.arange(0, abs(act[0]), 0.1):
+                x = math.floor(loc[0]+i*t0)
+                y = math.floor(loc[1]+i*ratio*t1)
+                if self.boundray(x, y):
+                    return
                 self.buttons[(x, y)].setStyleSheet("min-height:30px;min-width:30px; max-width:30px;max-height:30px;background-color:purple;")
+
         return
     
     def generateActionList(self, action, pi, x, y, eps):
@@ -131,32 +163,40 @@ class GirdWindow(QWidget):
         S = []
         A = []
         R = []
+        A_index = []
         now_x = x
         now_y = y
         S.append([x, y])
         while True:
             ASt = 9
             a_usable = []
+            a_usable_index = []
             final_a = []
-            for a in action:
-                if abs(a[0]+now_xmove)>5 or abs(a[1]+now_ymove)>5 or (a[0]+now_xmove==0 and a[1]+now_ymove==0):
+            final_a_index = 0
+            for i in len(action):
+                if abs(action[i][0]+now_xmove)>4 or abs(action[i][1]+now_ymove)>4 or (action[i][0]+now_xmove==0 and action[i][1]+now_ymove==0):
                     ASt -= 1
                 else:
-                    a_usable.append(a)
+                    a_usable.append(action[i])
+                    a_usable_index.append(i)
             prob = np.random.uniform(0.0, 1-eps+eps*2/ASt)
             if prob < eps/ASt:
-                final_a = a_usable[np.random.randint(0, len(a_usable)-1)]
+                rand_a = np.random.randint(0, len(a_usable)-1)
+                final_a_index = a_usable_index[rand_a]
+                final_a = a_usable[rand_a]
             else:
+                final_a_index = pi[now_x, now_y]
                 final_a = action[pi[now_x, now_y]]
 
             now_xmove += final_a[0]
             now_ymove += final_a[1]
             A.append(final_a)
+            A_index.append(final_a_index)
 
-            if abs(now_xmove)>5:
-                now_xmove = 5*abs(now_xmove)/now_xmove
-            if abs(now_ymove)>5:
-                now_ymove = 5*abs(now_ymove)/now_ymove
+            if abs(now_xmove)>4:
+                now_xmove = 4*abs(now_xmove)//now_xmove
+            if abs(now_ymove)>4:
+                now_ymove = 4*abs(now_ymove)//now_ymove
 
             cod = self.judge([now_x, now_y], [now_xmove, now_ymove])
             now_x += now_xmove
@@ -177,12 +217,24 @@ class GirdWindow(QWidget):
                 self.S = S
                 self.A = A
                 self.R = R
+                self.A_index = A_index
                 break
             elif cod == 0:
                 R.append(-1)
                 S.append([now_x, now_y])
-        print(S, A, R)
+        print(S, A, R, A_index)
         return
+
+    def train(self, gamma):
+        G = 0
+        W = 1
+        T = len(self.S)-1
+        for i in range(T+1):
+            index = T-i
+            G = gamma*G+self.R[index]
+            self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=W
+            self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=(W/self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]])*(G-self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]])
+            self.pi[self.S[index][0]][self.S[index][1]]=
     
     def showGenerate(self):
         for s in self.S:
