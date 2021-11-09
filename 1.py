@@ -1,2 +1,4 @@
 import numpy as np
-print(str(0.0))
+x = [0,1,2,3]
+x.remove(2)
+print(x)
