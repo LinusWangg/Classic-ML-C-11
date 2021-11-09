@@ -51,7 +51,7 @@ class GirdWindow(QWidget):
         self.grid_layout.addWidget(getgreens, 0, 50)
 
         generate = QPushButton("generate")
-        generate.clicked.connect(lambda:self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.1))
+        generate.clicked.connect(lambda:self.generateActionListUsePi(self.action, self.pi, self.greens[0][0], self.greens[0][1]))
         generate.setStyleSheet("min-height:30px;min-width:100px; max-width:100px;max-height:30px;background-color:white;")
         self.grid_layout.addWidget(generate, 2, 50)
 
@@ -186,6 +186,8 @@ class GirdWindow(QWidget):
         for x in range(36):
             for y in range(36):
                 self.value[x][y] = (1-eps)*Qmax[x][y] + eps/9*(Qtotal[x][y]-Qmax[x][y])
+                #if self.value[x][y] != 0.0:
+                    #print("xxx")
 
 
     def generateActionList(self, action, pi, x, y, eps):
@@ -261,6 +263,68 @@ class GirdWindow(QWidget):
         #print(S, A, R)
         return
 
+    def generateActionListUsePi(self, action, pi, x, y):
+        now_xmove = 0
+        now_ymove = 0
+        S = []
+        A = []
+        R = []
+        A_index = []
+        now_x = x
+        now_y = y
+        S.append([x, y])
+        while True:
+            ASt = 9
+            a_usable = []
+            a_usable_index = []
+            final_a = []
+            final_a_index = 0
+            for i in range(len(action)):
+                if abs(action[i][0]+now_xmove)>4 or abs(action[i][1]+now_ymove)>4 or (action[i][0]+now_xmove==0 and action[i][1]+now_ymove==0):
+                    ASt -= 1
+                else:
+                    a_usable.append(action[i])
+                    a_usable_index.append(i)
+            final_a_index = pi[now_x, now_y]
+            final_a = action[pi[now_x, now_y]]
+
+            now_xmove += final_a[0]
+            now_ymove += final_a[1]
+            A.append(final_a)
+            A_index.append(final_a_index)
+
+            if abs(now_xmove)>4:
+                now_xmove = 4*abs(now_xmove)//now_xmove
+            if abs(now_ymove)>4:
+                now_ymove = 4*abs(now_ymove)//now_ymove
+
+            cod = self.judge([now_x, now_y], [now_xmove, now_ymove])
+            now_x += now_xmove
+            now_y += now_ymove
+            if cod == 1:
+                R.append(-1)
+                if len(self.greens) == 1:
+                    green = self.greens[0]
+                else:
+                    green = self.greens[np.random.randint(0, len(self.greens)-1)]
+                now_x = green[0]
+                now_y = green[1]
+                S.append([now_x, now_y])
+                now_xmove = 0
+                now_ymove = 0
+            elif cod == 2:
+                R.append(0)
+                self.S = S
+                self.A = A
+                self.R = R
+                self.A_index = A_index
+                break
+            elif cod == 0:
+                R.append(-1)
+                S.append([now_x, now_y])
+        print(S, A, R)
+        return
+
     def MC_control(self, gamma):
         G = 0
         W = 1
@@ -276,10 +340,12 @@ class GirdWindow(QWidget):
             W = W*(1/self.A_prob[index])
 
     def train(self, gamma, epoch):
+        step = []
+        x = []
         for i in range(epoch):
-            print(i)
             self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.1)
             self.MC_control(gamma)
+            print("epoch:{0}, step:{1}".format(i, len(self.A)))
             self.showvalue(0.1)
     
     def showGenerate(self):
