@@ -24,9 +24,9 @@ class SnakeGame:
         self.snake = [self.start]
         self.num_actions = 4
         self.num_states = self.row * self.col
-        win = tk.Tk()
-        win.title("Snake Game")
-        self.canvas = tk.Canvas(win, width = self.width, height = self.height + 2 * self.Unit_size)
+        self.win = tk.Tk()
+        self.win.title("Snake Game")
+        self.canvas = tk.Canvas(self.win, width = self.width, height = self.height + 2 * self.Unit_size)
         self.canvas.pack()
 
         for i in range(self.col) :
@@ -42,7 +42,7 @@ class SnakeGame:
                 else:
                     self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
         
-        #win.mainloop()
+        #self.win.mainloop()
 
     def reset(self):
         self.start = [10, 10]
@@ -50,6 +50,24 @@ class SnakeGame:
             self.fruit = np.random.randint(0, 21, size=2, dtype=int).tolist()
             if self.fruit != self.start:
                 break
+        self.Unit_size = 20
+        self.row = 21
+        self.col = 21
+        self.height = self.row * self.Unit_size
+        self.width = self.col * self.Unit_size
+        self.now_action = 0
+        self.now_state = np.zeros((self.row, self.col))
+        self.now_state[self.start[0]][self.start[1]] = 1
+        self.now_state[self.fruit[0]][self.fruit[1]] = 2
+        self.actions = [[-1, 0], [1, 0], [0, 1], [1, 0]]
+        self.snake = [self.start]
+        self.num_actions = 4
+        self.num_states = self.row * self.col
+        self.win = tk.Tk()
+        self.win.title("Snake Game")
+        self.canvas = tk.Canvas(self.win, width = self.width, height = self.height + 2 * self.Unit_size)
+        self.canvas.pack()
+
         for i in range(self.col) :
             for j in range(self.row) :
                 x1 = i * self.Unit_size
@@ -62,10 +80,8 @@ class SnakeGame:
                     self.canvas.create_rectangle(x1, y1, x2, y2, fill = "red", outline = "white")
                 else:
                     self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
-        self.now_state = np.zeros((self.row, self.col))
-        self.now_state[self.start[0]][self.start[1]] = 1
-        self.now_state[self.fruit[0]][self.fruit[1]] = 2
-        self.snake = [self.start]
+        
+        #self.win.mainloop()
 
     def step(self, action):
         tail = self.snake[-1]
@@ -75,7 +91,7 @@ class SnakeGame:
         s = self.now_state
         if head[0] < 0 or head[0] >= self.row or head[1] < 0 or head[1] >= self.col:
             done = True
-            r = -10000
+            r = -100
 
         elif head == self.fruit:
             self.snake.insert(0, head)
@@ -90,9 +106,10 @@ class SnakeGame:
         
         elif self.now_state[head[0]][head[1]] == 1:
             done = True
-            r = -10000
+            r = -100
         
         else:
+            r = (abs(head[0]-self.fruit[0])+abs(head[1]-self.fruit[1]))-(abs(self.snake[0][0]-self.fruit[0])+abs(self.snake[0][1]-self.fruit[1]))
             self.snake.insert(0, head)
             self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
             self.now_state[head[0]][head[1]] = 1
@@ -114,12 +131,12 @@ class SnakeGame:
         dqn = Alg.make_DQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR)
 
         for i in range(1000):
-            s = np.array(env.now_state).reshape(441,)
+            s = np.array(self.now_state).reshape(441,)
             ep_r = 0
             while True:
                 a = dqn.choose_action(s, EPSILON, N_ACTIONS)
 
-                r, s_, done = env.step(env.actions[a])
+                r, s_, done = self.step(self.actions[a])
                 s_ = np.array(s_).reshape(441,)
 
                 dqn.store_transition(s, a, r, s_, MEMORY_CAPACITY)
@@ -132,9 +149,11 @@ class SnakeGame:
                             '| Ep_r: ', round(ep_r, 2))
                 
                 if done:
-                    env.reset()
+                    self.reset()
                     break
                 s = s_
+        
+        self.win.mainloop()
 
 env = SnakeGame()
 SnakeGame.train(env)
