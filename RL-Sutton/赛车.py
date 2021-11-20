@@ -334,7 +334,12 @@ class GirdWindow(QWidget):
             G = gamma*G+self.R[index]
             self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=W
             self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]]+=(W/self.C[self.S[index][0]][self.S[index][1]][self.A_index[index]])*(G-self.Q[self.S[index][0]][self.S[index][1]][self.A_index[index]])
-            self.pi[self.S[index][0]][self.S[index][1]]=np.argmax(self.Q, axis=2)[self.S[index][0]][self.S[index][1]]
+            pi = []
+            maxx = np.max(self.Q, axis=2)[self.S[index][0]][self.S[index][1]]
+            for j in range(len(self.action)):
+                if self.Q[self.S[index][0]][self.S[index][1]][j] == maxx:
+                    pi.append(j)
+            self.pi[self.S[index][0]][self.S[index][1]]=np.choose(np.random.randint(0,len(pi)),pi)
             if self.A_index[index]!=self.pi[self.S[index][0]][self.S[index][1]]:
                 return
             W = W*(1/self.A_prob[index])
@@ -343,6 +348,7 @@ class GirdWindow(QWidget):
         step = []
         x = []
         for i in range(epoch):
+            print(i)
             self.generateActionList(self.action, self.pi, self.greens[0][0], self.greens[0][1], 0.1)
             self.MC_control(gamma)
             print("epoch:{0}, step:{1}".format(i, len(self.A)))
