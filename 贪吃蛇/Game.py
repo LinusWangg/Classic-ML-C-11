@@ -3,17 +3,18 @@ import numpy as np
 import sys
 sys.path.append(r"E:\\python_Code\\Classic-ML-C-11\\贪吃蛇")
 import Alg
+import torch
 
 class SnakeGame:
     def __init__(self):
-        self.start = [10, 10]
+        self.start = [2, 2]
         while True:
-            self.fruit = np.random.randint(0, 21, size=2, dtype=int).tolist()
+            self.fruit = np.random.randint(0, 5, size=2, dtype=int).tolist()
             if self.fruit != self.start:
                 break
         self.Unit_size = 20
-        self.row = 21
-        self.col = 21
+        self.row = 5
+        self.col = 5
         self.height = self.row * self.Unit_size
         self.width = self.col * self.Unit_size
         self.now_action = 0
@@ -45,14 +46,14 @@ class SnakeGame:
         #self.win.mainloop()
 
     def reset(self):
-        self.start = [10, 10]
+        self.start = [2, 2]
         while True:
-            self.fruit = np.random.randint(0, 21, size=2, dtype=int).tolist()
+            self.fruit = np.random.randint(0, 5, size=2, dtype=int).tolist()
             if self.fruit != self.start:
                 break
         self.Unit_size = 20
-        self.row = 21
-        self.col = 21
+        self.row = 5
+        self.col = 5
         self.height = self.row * self.Unit_size
         self.width = self.col * self.Unit_size
         self.now_action = 0
@@ -63,10 +64,7 @@ class SnakeGame:
         self.snake = [self.start]
         self.num_actions = 4
         self.num_states = self.row * self.col
-        self.win = tk.Tk()
-        self.win.title("Snake Game")
-        self.canvas = tk.Canvas(self.win, width = self.width, height = self.height + 2 * self.Unit_size)
-        self.canvas.pack()
+        
 
         for i in range(self.col) :
             for j in range(self.row) :
@@ -86,34 +84,45 @@ class SnakeGame:
     def step(self, action):
         tail = self.snake[-1]
         head = [self.snake[0][0] + action[0], self.snake[0][1] + action[1]]
-        r = 0
+        if head[0] >= 5:
+            head[0] = head[0] - 5
+        elif head[0] < 0:
+            head[0] = 5 + head[0]
+        if head[1] >= 5:
+            head[1] = head[1] - 5
+        elif head[1] < 0:
+            head[1] = 5 + head[1]
+        
+        r = -1
         done = False
         s = self.now_state
-        if head[0] < 0 or head[0] >= self.row or head[1] < 0 or head[1] >= self.col:
-            done = True
-            r = -100
+        #if head[0] < 0 or head[0] >= self.row or head[1] < 0 or head[1] >= self.col:
+        #    done = True
+        #    r = -10
 
-        elif head == self.fruit:
+        if head == self.fruit:
             self.snake.insert(0, head)
             r = 10
             self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
             self.now_state[head[0]][head[1]] = 1
             while True:
-                self.fruit = np.random.randint(0, 21, size=2, dtype=int).tolist()
+                self.fruit = np.random.randint(0, 5, size=2, dtype=int).tolist()
                 if self.now_state[self.fruit[0]][self.fruit[1]] == 0:
                     break
+            self.canvas.create_rectangle(self.fruit[0]*self.Unit_size, self.fruit[1]*self.Unit_size, (self.fruit[0]+1)*self.Unit_size, (self.fruit[1]+1)*self.Unit_size, fill = "red", outline = "white")
             self.now_state[self.fruit[0]][self.fruit[1]] = 2
         
         elif self.now_state[head[0]][head[1]] == 1:
             done = True
-            r = -100
+            r = -10
         
         else:
-            r = (abs(head[0]-self.fruit[0])+abs(head[1]-self.fruit[1]))-(abs(self.snake[0][0]-self.fruit[0])+abs(self.snake[0][1]-self.fruit[1]))
+            #r = -(abs(head[0]-self.fruit[0])+abs(head[1]-self.fruit[1]))+(abs(self.snake[0][0]-self.fruit[0])+abs(self.snake[0][1]-self.fruit[1]))
             self.snake.insert(0, head)
             self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
             self.now_state[head[0]][head[1]] = 1
             self.snake.pop()
+            self.canvas.create_rectangle(tail[0]*self.Unit_size, tail[1]*self.Unit_size, (tail[0]+1)*self.Unit_size, (tail[1]+1)*self.Unit_size, fill = "silver", outline = "white")
             self.now_state[tail[0]][tail[1]] = 0
 
         return r, self.now_state, done
@@ -131,13 +140,16 @@ class SnakeGame:
         dqn = Alg.make_DQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR)
 
         for i in range(1000):
-            s = np.array(self.now_state).reshape(441,)
+            s = np.array(self.now_state).reshape(25,)
             ep_r = 0
+            if i%100 == 0:
+                torch.save(dqn.eval_net.state_dict(), "/model.pk1")
             while True:
                 a = dqn.choose_action(s, EPSILON, N_ACTIONS)
 
                 r, s_, done = self.step(self.actions[a])
-                s_ = np.array(s_).reshape(441,)
+                self.win.update()
+                s_ = np.array(s_).reshape(25,)
 
                 dqn.store_transition(s, a, r, s_, MEMORY_CAPACITY)
 
@@ -150,10 +162,11 @@ class SnakeGame:
                 
                 if done:
                     self.reset()
+                    self.win.update()
                     break
                 s = s_
         
-        self.win.mainloop()
 
 env = SnakeGame()
 SnakeGame.train(env)
+env.win.mainloop()
