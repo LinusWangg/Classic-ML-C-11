@@ -143,7 +143,7 @@ class SnakeGame:
             s = np.array(self.now_state).reshape(25,)
             ep_r = 0
             if i%100 == 0:
-                torch.save(dqn.eval_net.state_dict(), "/model.pk1")
+                torch.save(dqn.eval_net.state_dict(), "model.pk1")
             while True:
                 a = dqn.choose_action(s, EPSILON, N_ACTIONS)
 
