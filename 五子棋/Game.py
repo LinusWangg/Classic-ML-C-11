@@ -49,103 +49,28 @@ class SnakeGame:
         #self.win.mainloop()
 
     def check_win(self):
-        role = self.now_state[0][0]
-        len = 0
         for i in range(self.row):
-            len = 0
             for j in range(self.col):
-                if self.now_state[i][j] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i][j] == role:
-                        len += 1
-                        role = self.now_state[i][j]
-                        if len == 5:
-                            return role,i,j
-                    else:
-                        len = 0
-                        role = self.now_state[i][j]
-        role = self.now_state[4][0]
-        for i in range(4, self.row):
-            len = 0
-            for j in range(i+1):
-                if self.now_state[i-j][j] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i-j][j] == role:
-                        len += 1
-                        role = self.now_state[i-j][j]
-                        if len == 5:
-                            return role,i-j,j
-                    else:
-                        len = 0
-                        role = self.now_state[i-j][j]
-        role = self.now_state[1][9]
-        len = 0
-        for i in range(1, 6):
-            len = 0
-            for j in range(9, i, -1):
-                if self.now_state[i+9-j][j] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i+9-j][j] == role:
-                        len += 1
-                        role = self.now_state[i+9-j][j]
-                        if len == 5:
-                            return role,i+9-j,j
-                    else:
-                        len = 0
-                        role = self.now_state[i+9-j][j]
-        role = self.now_state[0][0]
-        len = 0
-        for i in range(6):
-            len = 0
-            for j in range(9-i+1):
-                if self.now_state[i+j][j] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i+j][j] == role:
-                        len += 1
-                        role = self.now_state[i+j][j]
-                        if len == 5:
-                            return role,i+j,j
-                    else:
-                        len = 0
-                        role = self.now_state[i+j][j]
-        role = self.now_state[0][1]
-        len = 0
-        for j in range(1, 6):
-            len = 0
-            for i in range(9-j):
-                if self.now_state[i][j+i] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i][j+i] == role:
-                        len += 1
-                        role = self.now_state[i][j+i]
-                        if len == 5:
-                            return role,i,j+i
-                    else:
-                        len = 0
-                        role = self.now_state[i][j+i]
-        role = self.now_state[0][0]
-        len = 0
-        for j in range(10):
-            len = 0
-            for i in range(10):
-                if self.now_state[i][j] == 0:
-                    len = 0
-                else:
-                    if self.now_state[i][j] == role:
-                        len += 1
-                        role = self.now_state[i][j]
-                        if len == 5:
-                            return role,i,j
-                    else:
-                        len = 0
-                        role = self.now_state[i][j]
-        
-        return 0,0,0
+                role = self.now_state[i][j]
+                if role == 0:
+                    continue
+                state_list = []
+                if i >= 2 and i < self.row-2:
+                    state_list.append([self.now_state[i-2][j], self.now_state[i-1][j], self.now_state[i][j], self.now_state[i+1][j], self.now_state[i+2][j]])
+                if i >= 2 and i < self.row-2 and j >= 2 and j < self.col-2:
+                    state_list.append([self.now_state[i-2][j-2], self.now_state[i-1][j-1], self.now_state[i][j], self.now_state[i+1][j+1], self.now_state[i+2][j+2]])
+                    state_list.append([self.now_state[i-2][j+2], self.now_state[i-1][j+1], self.now_state[i][j], self.now_state[i+1][j-1], self.now_state[i+2][j-2]])
+                if j >= 2 and j < self.row-2:
+                    state_list.append([self.now_state[i][j-2], self.now_state[i][j-1], self.now_state[i][j], self.now_state[i][j+1], self.now_state[i][j+2]])
+                for state in state_list:
+                    flag = 0
+                    for s in state:
+                        if s != role:
+                            flag = 1
+                            break
+                    if flag == 0:
+                        return role
+        return 0
 
     def step(self, action, role):
         done = False
@@ -157,16 +82,14 @@ class SnakeGame:
         else:
             color = "black"
         self.canvas.create_rectangle(x*self.Unit_size, y*self.Unit_size, (x+1)*self.Unit_size, (y+1)*self.Unit_size, fill = color, outline = "white")
-        if self.now_state[x][y] != 0:
+        if self.now_state[y][x] != 0:
             r = -100
             done = True
             return r, self.now_state, done
             
-        self.now_state[x][y] = role
+        self.now_state[y][x] = role
         r = 0
-        ans, x, y = self.check_win()
-        if x!=0 and y!=0:
-            print(x,y)
+        ans = self.check_win()
         if ans == 0:
             done = False
         if ans == role:

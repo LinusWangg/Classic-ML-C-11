@@ -38,7 +38,7 @@ class DQN(object):
             _, action = torch.sort(actions_value, dim=1, descending=True)
             action = action.numpy().tolist()[0]
             for i in range(len(action)):
-                if state[action[i]//10][action[i]%10] == 0:
+                if state[action[i]%10][action[i]//10] == 0:
                     return action[i]
 
         else:
