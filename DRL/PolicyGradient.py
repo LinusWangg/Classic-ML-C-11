@@ -70,7 +70,7 @@ def finish_episode():
     R = 0
     policy_loss = []
     returns = []
-    for r in policy.rewards[::-1]:
+    for r in policy.rewards[::-1]: #倒置插值
         R = r + args.gamma * R
         returns.insert(0,R)        # 将R插入到指定的位置0处
     returns = torch.tensor(returns)
