@@ -2,7 +2,8 @@ import gym
 from Actor import *
 from Critic import *
 
-env = gym.make('Pendulum-v1')
+game_name = 'Pendulum-v1'
+env = gym.make(game_name)
 env = env.unwrapped
 N_ACTIONS = env.action_space.shape[0]
 N_STATES = env.observation_space.shape[0]
@@ -59,10 +60,10 @@ class DDPG(object):
             eval('self.critic.target_net.' + x + '.data.add_(TAU*self.critic.eval_net.' + x + '.data)')
 
     def save_model(self):
-        torch.save({'Pendulum_ActorEval':self.actor.policy.state_dict(),
-        'Pendulum_ActorTarget':self.actor.target.state_dict(),
-        'Pendulum_CriticEval':self.critic.eval_net.state_dict(),
-        'Pendulum_CriticTarget':self.critic.target_net.state_dict()}, '\parameters.pth.tar')
+        torch.save({game_name+'_ActorEval':self.actor.policy.state_dict(),
+        game_name+'_ActorTarget':self.actor.target.state_dict(),
+        game_name+'_CriticEval':self.critic.eval_net.state_dict(),
+        game_name+'_CriticTarget':self.critic.target_net.state_dict()}, game_name+'_parameters.pth.tar')
 
 
 
@@ -74,7 +75,7 @@ a_low_bound = env.action_space.low
 EP_STEPS = 200
 RENDER = False
 
-for i in range(100):
+for i in range(200):
     s = env.reset()
     ep_r = 0
     for j in range(200):
