@@ -58,6 +58,12 @@ class DDPG(object):
             eval('self.critic.target_net.' + x + '.data.mul_((1-TAU))')
             eval('self.critic.target_net.' + x + '.data.add_(TAU*self.critic.eval_net.' + x + '.data)')
 
+    def save_model(self):
+        torch.save({'Pendulum_ActorEval':self.actor.policy.state_dict(),
+        'Pendulum_ActorTarget':self.actor.target.state_dict(),
+        'Pendulum_CriticEval':self.critic.eval_net.state_dict(),
+        'Pendulum_CriticTarget':self.critic.target_net.state_dict()}, '\parameters.pth.tar')
+
 
 
 
@@ -68,10 +74,9 @@ a_low_bound = env.action_space.low
 EP_STEPS = 200
 RENDER = False
 
-for i in range(5000):
+for i in range(100):
     s = env.reset()
     ep_r = 0
-    print(i)
     for j in range(200):
         if RENDER: 
             env.render()
@@ -97,9 +102,9 @@ for i in range(5000):
         if j == 199 or done:
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))
-            if ep_r > -600:
-                RENDER = True
         
         if done:
             break
         s = s_
+
+ddpg.save_model()
