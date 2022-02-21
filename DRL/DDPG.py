@@ -15,7 +15,7 @@ TAU = 0.01
 MEMORY_CAPACITY = 10000
 BATCH_SIZE = 32
 RENDER = False
-ENV_NAME = 'Pendulum-v1'
+ENV_NAME = 'CarRacing-v0'
 
 ########################## DDPG Framework ######################
 class ActorNet(nn.Module): # define the network structure for actor and critic

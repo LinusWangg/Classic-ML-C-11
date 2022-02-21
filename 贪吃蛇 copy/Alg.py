@@ -9,14 +9,18 @@ import threading
 class Net(nn.Module):
     def __init__(self, N_STATES, N_ACTIONS):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(N_STATES, 150)
+        self.fc1 = nn.Linear(N_STATES, 18)
         self.fc1.weight.data.normal_(0, 0.1)   # initialization
-        self.out = nn.Linear(150, N_ACTIONS)
+        self.fc2 = nn.Linear(18, 18)
+        self.fc2.weight.data.normal_(0, 0.1)   # initialization
+        self.out = nn.Linear(18, N_ACTIONS)
         self.out.weight.data.normal_(0, 0.1)   # initialization
         
     def forward(self, x):
         x = x.cuda()
         x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
         x = F.relu(x)
         actions_value = self.out(x)
         return actions_value
@@ -71,14 +75,6 @@ class DQN(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-# Hyper Parameters
-BATCH_SIZE = 32
-LR = 0.004                   # learning rate
-EPSILON = 0.9               # greedy policy
-GAMMA = 0.9                 # reward discount
-TARGET_REPLACE_ITER = 100   # target update frequency
-MEMORY_CAPACITY = 2000
 
 def make_DQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR):
     return DQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR)
