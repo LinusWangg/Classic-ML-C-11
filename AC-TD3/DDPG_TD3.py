@@ -3,18 +3,18 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('CartPole-v0')
+env = gym.make('Pendulum-v1')
 env = env.unwrapped
 #连续
-#N_ACTIONS = env.action_space.shape[0]
+N_ACTIONS = env.action_space.shape[0]
 #离散
-N_ACTIONS = env.action_space.n
+#N_ACTIONS = 1
 N_STATES = env.observation_space.shape[0]
-MEMORY_CAPACITY = 3000
+MEMORY_CAPACITY = 2000
 BATCH_SIZE = 32
 TAU = 0.01
 LR = 1e-3
-GAMMA = 0.9
+GAMMA = 0.99
 
 class DDPG(object):
     def __init__(self):
@@ -36,17 +36,16 @@ class DDPG(object):
         self.memory[index, :] = transition
         self.memory_counter += 1
 
-    def select_action(self, s):
+    def select_action(self, s, a_bound):
         #连续
-        #s = torch.from_numpy(s).float().unsqueeze(0)
-        #actions = self.actor_eval.forward(s, a_bound)
-        #return actions[0].detach()
-        #离散
         s = torch.from_numpy(s).float().unsqueeze(0)
-        probs = self.actor_eval.forward(s)
-        m = Categorical(probs)
-        action = m.sample()
-        return action.item()
+        actions = self.actor_eval.forward(s, a_bound)
+        return actions[0].detach()
+        #离散
+        #s = torch.from_numpy(s).float().unsqueeze(0)
+        #act = self.actor_eval.forward(s)
+        #action = np.clip(np.random.normal(act.detach().numpy(), VAR), 0, 1)
+        #return act, round(action.item())
 
     def learn(self):
         sample_index = np.random.choice(MEMORY_CAPACITY, BATCH_SIZE)
@@ -55,19 +54,24 @@ class DDPG(object):
         b_a = torch.FloatTensor(b_memory[:, N_STATES:N_STATES+1])
         b_r = torch.FloatTensor(b_memory[:, N_STATES+1:N_STATES+2])
         b_s_ = torch.FloatTensor(b_memory[:, -N_STATES:])
-        b_amat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
-        index = torch.Tensor(b_a, dtype = int)
-        b_amat[index] = 1.
+        #b_amat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
+        #index = b_a.long()
+        #for i in range(BATCH_SIZE):
+        #    b_amat[i, index[i]] = 1.
 
-        q_eval = self.critic_eval(b_s, b_a)
+        # 这边还要算一遍action是为了构造出梯度
+        a = self.actor_eval(b_s, a_bound)
+        q_eval = self.critic_eval(b_s, a)
         a_loss = -torch.mean(q_eval)
         self.actor_opt.zero_grad()
         a_loss.backward()
         self.actor_opt.step()
 
-        a_next = self.actor_target(b_s_)
-        a_next = np.array(a_next)
-        argmax_a = np.argmax(a_next, axis=0)
+        a_next = self.actor_target(b_s_, a_bound)
+        #argmax_a = torch.argmax(a_next, axis=1)
+        #a_next_mat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
+        #for i in range(BATCH_SIZE):
+        #    a_next_mat[i, argmax_a[i]] = 1.
         q_next = self.critic_target(b_s_, a_next)
         q_target = b_r + GAMMA * q_next
         q_eval = self.critic_eval(b_s, b_a)
@@ -85,10 +89,9 @@ class DDPG(object):
 
 
 ddpg = DDPG()
-#连续
-#var = 3
-#a_bound = env.action_space.high
-#a_low_bound = env.action_space.low
+var = 3
+a_bound = env.action_space.high
+a_low_bound = env.action_space.low
 EP_STEPS = 200
 RENDER = False
 
@@ -98,11 +101,8 @@ for i in range(5000):
     for j in range(200):
         if RENDER: 
             env.render()
-        #连续
-        #a = ddpg.select_action(s, a_bound)
-        #a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
-        #离散
-        a = ddpg.select_action(s)
+        a = ddpg.select_action(s, a_bound)
+        a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
 
         s_, r, done, info = env.step(a)
 
@@ -117,9 +117,10 @@ for i in range(5000):
         ep_r += r
         
         if ddpg.memory_counter > MEMORY_CAPACITY:
+            var *= 0.9995
             ddpg.learn()
 
-        if j == 199 or done:
+        if done or j==199:
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))
             if ep_r > -600:

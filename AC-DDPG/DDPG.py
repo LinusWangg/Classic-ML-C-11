@@ -7,7 +7,7 @@ env = env.unwrapped
 N_ACTIONS = env.action_space.shape[0]
 N_STATES = env.observation_space.shape[0]
 ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_space.sample().shape     # to confirm the shape
-MEMORY_CAPACITY = 10000
+MEMORY_CAPACITY = 2000
 BATCH_SIZE = 32
 TAU = 0.01
 

@@ -12,18 +12,18 @@ class Policy(nn.Module):
         self.out = nn.Linear(30, n_actions)
         self.out.weight.data.normal_(0, 0.1)
 
-    #连续
-    #def forward(self, x, a_bound):
-    #    x = self.fc1(x)
-    #    x = F.relu(x)
-    #    x = self.out(x)
-    #    x = torch.tanh(x)
-    #    actions = x * a_bound[0]
-    #    return actions
-
-    #离散
-    def forward(self, x):
+   # 连续
+    def forward(self, x, a_bound):
         x = self.fc1(x)
         x = F.relu(x)
         x = self.out(x)
-        return F.softmax(x)
+        x = torch.tanh(x)
+        actions = x * a_bound[0]
+        return actions
+
+    #离散
+    #def forward(self, x):
+    #    x = self.fc1(x)
+    #    x = F.relu(x)
+    #    x = self.out(x)
+    #    return F.sigmoid(x)
