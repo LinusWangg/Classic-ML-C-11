@@ -1,9 +1,9 @@
 from re import T
-import tkinter as tk
 import numpy as np
 import sys
 import Alg
 import torch
+import tkinter as tk
 
 class SnakeGame:
     def food_check(self, dir):
@@ -79,31 +79,30 @@ class SnakeGame:
         self.snake = [self.start]
         self.num_actions = 4
         self.num_states = 24
-        #self.win = tk.Tk()
-        #self.win.title("Snake Game")
-        #self.canvas = tk.Canvas(self.win, width = self.width, height = self.height + 2 * self.Unit_size)
-        #self.canvas.pack()
+        self.win = tk.Tk()
+        self.win.title("Snake Game")
+        self.canvas = tk.Canvas(self.win, width = self.width, height = self.height + 2 * self.Unit_size)
+        self.canvas.pack()
 
-        #for i in range(self.col) :
-        #    for j in range(self.row) :
-        #        x1 = i * self.Unit_size
-        #        y1 = j * self.Unit_size
-        #        x2 = (i + 1) * self.Unit_size
-        #        y2 = (j + 1) * self.Unit_size
-        #        if [i, j] == self.start:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "green", outline = "white")
-        #        elif [i, j] == self.fruit:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "red", outline = "white")
-        #        elif self.now_state[i][j] == 3:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "grey", outline = "white")
-        #        else:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
+        for i in range(self.col) :
+            for j in range(self.row) :
+                x1 = i * self.Unit_size
+                y1 = j * self.Unit_size
+                x2 = (i + 1) * self.Unit_size
+                y2 = (j + 1) * self.Unit_size
+                if [i, j] == self.start:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "green", outline = "white")
+                elif [i, j] == self.fruit:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "red", outline = "white")
+                elif self.now_state[i][j] == 3:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "grey", outline = "white")
+                else:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
 
 
     def reset(self):
         self.row = 8
         self.col = 8
-        self.life = 300
         self.start = np.random.randint(1, self.row-1, size=2, dtype=int).tolist()
         while True:
             self.fruit = np.random.randint(0, self.row, size=2, dtype=int).tolist()
@@ -121,20 +120,20 @@ class SnakeGame:
             self.now_state[self.row-1][i] = 3
         self.snake = [self.start]
         
-        #for i in range(self.col) :
-        #    for j in range(self.row) :
-        #        x1 = i * self.Unit_size
-        #        y1 = j * self.Unit_size
-        #        x2 = (i + 1) * self.Unit_size
-        #        y2 = (j + 1) * self.Unit_size
-        #        if [i, j] == self.start:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "green", outline = "white")
-        #        elif [i, j] == self.fruit:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "red", outline = "white")
-        #        elif self.now_state[i][j] == 3:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "grey", outline = "white")
-        #        else:
-        #            self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
+        for i in range(self.col) :
+            for j in range(self.row) :
+                x1 = i * self.Unit_size
+                y1 = j * self.Unit_size
+                x2 = (i + 1) * self.Unit_size
+                y2 = (j + 1) * self.Unit_size
+                if [i, j] == self.start:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "green", outline = "white")
+                elif [i, j] == self.fruit:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "red", outline = "white")
+                elif self.now_state[i][j] == 3:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "grey", outline = "white")
+                else:
+                    self.canvas.create_rectangle(x1, y1, x2, y2, fill = "silver", outline = "white")
 
 
     def step(self, action):
@@ -149,7 +148,7 @@ class SnakeGame:
         elif head[1] < 0:
             head[1] = self.col + head[1]
         
-        r = 0.1
+        r = 0
         done = False
 
         s = self.now_state
@@ -160,13 +159,13 @@ class SnakeGame:
         if head == self.fruit:
             self.snake.insert(0, head)
             r = 1
-            #self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
+            self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
             self.now_state[head[0]][head[1]] = 1
             while True:
                 self.fruit = np.random.randint(0, self.row, size=2, dtype=int).tolist()
                 if self.now_state[self.fruit[0]][self.fruit[1]] == 0:
                     break
-            #self.canvas.create_rectangle(self.fruit[0]*self.Unit_size, self.fruit[1]*self.Unit_size, (self.fruit[0]+1)*self.Unit_size, (self.fruit[1]+1)*self.Unit_size, fill = "red", outline = "white")
+            self.canvas.create_rectangle(self.fruit[0]*self.Unit_size, self.fruit[1]*self.Unit_size, (self.fruit[0]+1)*self.Unit_size, (self.fruit[1]+1)*self.Unit_size, fill = "red", outline = "white")
             self.now_state[self.fruit[0]][self.fruit[1]] = 2
         
         elif self.now_state[head[0]][head[1]] == 1 or self.now_state[head[0]][head[1]] == 3:
@@ -176,10 +175,10 @@ class SnakeGame:
         else:
             #r = -(abs(head[0]-self.fruit[0])+abs(head[1]-self.fruit[1]))+(abs(self.snake[0][0]-self.fruit[0])+abs(self.snake[0][1]-self.fruit[1]))
             self.snake.insert(0, head)
-            #self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
+            self.canvas.create_rectangle(head[0]*self.Unit_size, head[1]*self.Unit_size, (head[0]+1)*self.Unit_size, (head[1]+1)*self.Unit_size, fill = "green", outline = "white")
             self.now_state[head[0]][head[1]] = 1
             self.snake.pop()
-            #self.canvas.create_rectangle(tail[0]*self.Unit_size, tail[1]*self.Unit_size, (tail[0]+1)*self.Unit_size, (tail[1]+1)*self.Unit_size, fill = "silver", outline = "white")
+            self.canvas.create_rectangle(tail[0]*self.Unit_size, tail[1]*self.Unit_size, (tail[0]+1)*self.Unit_size, (tail[1]+1)*self.Unit_size, fill = "silver", outline = "white")
             self.now_state[tail[0]][tail[1]] = 0
         
         return r, self.now_state, done
@@ -187,44 +186,53 @@ class SnakeGame:
     def train(self):
         N_ACTIONS = self.num_actions
         N_STATES = self.num_states
-        BATCH_SIZE = 32
-        LR = 1e-4                   # learning rate
-        EPSILON = 1              # greedy policy
+        BATCH_SIZE = 256
+        LR = 1e-5                   # learning rate
+        EPSILON = 1             # greedy policy
         GAMMA = 0.9                 # reward discount
         TARGET_REPLACE_ITER = 100   # target update frequency
-        MEMORY_CAPACITY = 2000
+        MEMORY_CAPACITY = 4000
 
         dqn = Alg.make_DQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR)
-        #dqn.eval_net.load_state_dict(torch.load("model.pk1"))
-        #dqn.target_net.load_state_dict(torch.load("model.pk1"))
+        dqn.eval_net.load_state_dict(torch.load("model.pk1"))
+        dqn.target_net.load_state_dict(torch.load("model.pk1"))
 
         for i in range(100000):
             s = self.all_check()
             ep_r = 0
             if i%100 == 0:
                 torch.save(dqn.eval_net.state_dict(), "model.pk1")
-            while True:
+            j = 1
+            len_snake = []
+            while j <= 1:
+                s = self.all_check()
                 a = dqn.choose_action(s, EPSILON, N_ACTIONS)
 
                 r, s_, done = self.step(self.actions[a])
                 s_ = self.all_check()
-                #self.win.update()
+                self.win.update()
 
                 dqn.store_transition(s, a, r, s_, MEMORY_CAPACITY)
 
                 ep_r += r
-                if dqn.memory_counter > MEMORY_CAPACITY:
-                    #dqn.learn(GAMMA, TARGET_REPLACE_ITER, MEMORY_CAPACITY, BATCH_SIZE, N_STATES)
-                    if done:
-                        print('Ep: ', i,
-                            '| Ep_r: ', round(ep_r, 2),
-                            '| Len:', len(env.snake))
                 
                 if done:
+                    len_snake.append(len(env.snake))
                     self.reset()
-                    #self.win.update()
-                    break
+                    j += 1
+                    self.win.update()
+                
                 s = s_
+            
+            #if dqn.memory_counter > MEMORY_CAPACITY:
+                #for z in range(36):
+                    #dqn.learn(GAMMA, TARGET_REPLACE_ITER, MEMORY_CAPACITY, BATCH_SIZE, N_STATES)
+                
+            print('Ep: ', i,
+                '| Ep_r: ', round(ep_r, 2),
+                '| Len:', round(sum(len_snake)/len(len_snake), 2), 
+                '| Max:', max(len_snake))
+                
         
 
 env = SnakeGame()
