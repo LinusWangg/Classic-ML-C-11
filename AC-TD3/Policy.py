@@ -7,9 +7,9 @@ from torch.distributions import Categorical
 class Policy(nn.Module):
     def __init__(self, n_features, n_actions):
         super(Policy,self).__init__()
-        self.fc1 = nn.Linear(n_features, 30)
+        self.fc1 = nn.Linear(n_features, 50)
         self.fc1.weight.data.normal_(0, 0.1)
-        self.out = nn.Linear(30, n_actions)
+        self.out = nn.Linear(50, n_actions)
         self.out.weight.data.normal_(0, 0.1)
 
    # 连续
@@ -18,7 +18,7 @@ class Policy(nn.Module):
         x = F.relu(x)
         x = self.out(x)
         x = torch.tanh(x)
-        actions = x * a_bound[0]
+        actions = torch.mul(x, a_bound)
         return actions
 
     #离散
