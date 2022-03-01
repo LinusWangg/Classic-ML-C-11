@@ -58,7 +58,7 @@ class ExperiencePool:
         if center_dis > self.minMeanDis and updateMode == 1:
             center_id = self.n_clusters
             self.n_clusters += 1
-            self.cluster_mean.append(data)
+            self.cluster_mean = np.append(self.cluster_mean, data.reshape(1, data.shape[0]), axis=0)
             for center in self.cluster_mean:
                 center, _ = self.updateMean(data, center, 1)
         else:
@@ -93,14 +93,18 @@ class ExperiencePool:
 
     # 挑选样本
     def sample(self, batch_size, model, select_mode):
-        heap = [[]]*self.n_clusters
+        heap = [[] for i in range(self.n_clusters)]
         batch_data = []
         for data_id in range(self.n_maxexps):
             center_id, center_dis = self.dis2selfcenter(self.memory[data_id])
             heapq.heappush(heap[center_id], (-center_dis, data_id))
-        for i in range(batch_size):
+        i = 0
+        while i < batch_size:
+            if len(heap[i%self.n_clusters])==0:
+                continue
             select_data = heapq.heappop(heap[i%self.n_clusters])
-            batch_data.append(select_data[1])
+            batch_data.append(self.memory[select_data[1], :])
+            i += 1
         return batch_data
                 
 

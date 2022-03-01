@@ -9,7 +9,7 @@ Exp_Size = 1000
 # Epoch
 epoch_num = 1000
 # batchsize
-batch_num = 64
+batch_num = 32
 # eps-action
 EPSILON = 0.9  
 # 
