@@ -119,7 +119,7 @@ class ExperiencePool:
             data = torch.FloatTensor(data).detach()
             output = model(data).detach()
             for x in output:
-                res += - x * torch.log(x)
+                res += x * torch.log(x)
             return res.item()
         for data_id in range(self.n_maxexps):
             entropy = calculate_Entropy(model, self.memory[data_id])
