@@ -91,8 +91,8 @@ class ExperiencePool:
             self.updateMeans(copy, -1)
         self.memory_iter %= self.n_maxexps
 
-    # 挑选样本
-    def sample(self, batch_size, model, select_mode):
+    # 挑选离k-means中心最远的点
+    def maxDis2Center_Sample(self, batch_size):
         heap = [[] for i in range(self.n_clusters)]
         batch_data = []
         for data_id in range(self.n_maxexps):
@@ -105,8 +105,42 @@ class ExperiencePool:
             select_data = heapq.heappop(heap[i%self.n_clusters])
             batch_data.append(self.memory[select_data[1], :])
             i += 1
-        return batch_data
-                
+        return np.array(batch_data)
+
+    def Random_Sample(self, batch_size):
+        sample_index = np.random.choice(self.n_maxexps, batch_size)
+        return self.memory[sample_index, :]
+
+    def maxEntropy_Sample(self, batch_size, model):
+        heap = []
+        batch_data = []
+        def calculate_Entropy(model, data):
+            res = 0
+            data = torch.FloatTensor(data).detach()
+            output = model(data).detach()
+            for x in output:
+                res += - x * torch.log(x)
+            return res.item()
+        for data_id in range(self.n_maxexps):
+            entropy = calculate_Entropy(model, self.memory[data_id])
+            heapq.heappush(heap, (entropy, data_id))
+        i = 0
+        while i < batch_size:
+            select_data = heapq.heappop(heap)
+            batch_data.append(self.memory[select_data[1], :])
+            i += 1
+        return np.array(batch_data)
+
+    # 挑选样本
+    def sample(self, batch_size, model, select_mode):
+        if select_mode == "maxDis2Center":
+            return self.maxDis2Center_Sample(batch_size)
+        
+        elif select_mode == "Random":
+            return self.Random_Sample(batch_size)
+        
+        elif select_mode == "MaxEntropy":
+            return self.maxEntropy_Sample(batch_size, model)
 
                 
 

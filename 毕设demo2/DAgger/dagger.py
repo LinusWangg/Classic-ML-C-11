@@ -1,3 +1,4 @@
+from gzip import READ
 import gym
 from Settings import *
 from expert import Expert
@@ -28,8 +29,8 @@ class DAgger_Pipeline(object):
         #dataDagger = TensorDataset(states, actions)
         #trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
         total_loss = 0
-        batch_data = self.ExpPool.sample(batch_size, 0, 0)
-        states = torch.from_numpy(np.array(batch_data))
+        batch_data = self.ExpPool.sample(batch_size, self.learner, "MaxEntropy")
+        states = torch.from_numpy(batch_data)
         for i in range(5):
             #for s, a in zip(states, actions):
             expert_a = self.expert_action(states)
@@ -73,31 +74,33 @@ def main():
     n_features = env.observation_space.shape[0]
     ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_space.sample().shape     # to confirm the shape
     pipeline = DAgger_Pipeline(n_features, n_actions)
+    RENDER = False
     for epoch in range(epoch_num):
-        states = []
-        actions = []
         s = env.reset()
         ep_r = 0
         done = False
+        step = 0
         while True:
-            #env.render()
+            if step%50==0:
+                print(epoch, step)
+            if RENDER:
+                env.render()
             a = pipeline.learner_action(s, EPSILON, n_actions)
             pipeline.ExpPool.add(s)
 
             s_, r, done, info = env.step(a)
 
-            states.append(s)
-            actions.append(a)
-
             ep_r += r
             if done and pipeline.ExpPool.is_build:
                 print('Ep: ', epoch,
                     '| Ep_r: ', round(ep_r, 2))
+                #RENDER = True
 
             if done:
                 break
             
             s = s_
+            step += 1
         
         if pipeline.ExpPool.is_build:
             total_loss = pipeline.train(batch_num)
