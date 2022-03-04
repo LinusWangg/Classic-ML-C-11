@@ -77,13 +77,14 @@ class ExperiencePool:
         self.memory_iter += 1
         if self.memory_iter == self.n_maxexps:
             self.kmeans = KMeans( 
-                n_clusters = self.n_clusters,
+                n_clusters = 3,
                 n_init = 10,
                 max_iter = 300,
                 init = 'k-means++',
                 ).fit(self.memory)
             print("------------------K-Means建立------------------")
             self.cluster_mean = self.kmeans.cluster_centers_
+            self.n_clusters = 3
             self.is_build = True
             self.maxMinDisBetMeans()
         elif self.is_build:
@@ -99,11 +100,14 @@ class ExperiencePool:
             center_id, center_dis = self.dis2selfcenter(self.memory[data_id])
             heapq.heappush(heap[center_id], (-center_dis, data_id))
         i = 0
+        t = 0
         while i < batch_size:
-            if len(heap[i%self.n_clusters])==0:
+            if len(heap[t%self.n_clusters])==0:
+                t += 1
                 continue
-            select_data = heapq.heappop(heap[i%self.n_clusters])
+            select_data = heapq.heappop(heap[t%self.n_clusters])
             batch_data.append(self.memory[select_data[1], :])
+            t += 1
             i += 1
         return np.array(batch_data)
 
@@ -131,8 +135,39 @@ class ExperiencePool:
             i += 1
         return np.array(batch_data)
 
+    # 需要多个网络的QBC模式
+    def QueryByCommittee(self, batch_size, model):
+        pass
+
+    def DensityWeighted(self, batch_size, model, beta):
+        heap = []
+        batch_data = []
+        def calculate_Entropy(model, data):
+            res = 0
+            data = torch.FloatTensor(data).detach()
+            output = model(data).detach()
+            for x in output:
+                res += x * torch.log(x)
+            return res.item()
+        def calculate_similarity(data):
+            res = 0
+            for center in self.cluster_mean:
+                res += np.sum(np.abs(data - center))
+            return res.item() / self.n_clusters
+        for data_id in range(self.n_maxexps):
+            entropy = calculate_Entropy(model, self.memory[data_id])
+            similarity = pow(calculate_similarity(self.memory[data_id]), beta)
+            weight = entropy * similarity
+            heapq.heappush(heap, (weight, data_id))
+        i = 0
+        while i < batch_size:
+            select_data = heapq.heappop(heap)
+            batch_data.append(self.memory[select_data[1], :])
+            i += 1
+        return np.array(batch_data)
+    
     # 挑选样本
-    def sample(self, batch_size, model, select_mode):
+    def sample(self, batch_size, model, select_mode, beta=0.5):
         if select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
@@ -142,7 +177,11 @@ class ExperiencePool:
         elif select_mode == "MaxEntropy":
             return self.maxEntropy_Sample(batch_size, model)
 
-                
+        elif select_mode == "QueryByCommittee":
+            return self.QueryByCommittee(batch_size, model)
+
+        elif select_mode == "Density-Weighted":
+            return self.DensityWeighted(batch_size, model, beta)
 
 
  

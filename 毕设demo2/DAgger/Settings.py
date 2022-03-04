@@ -7,7 +7,7 @@ game_name = "CartPole-v0"
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
-epoch_num = 1000
+epoch_num = 100
 # batchsize
 batch_num = 32
 # eps-action
