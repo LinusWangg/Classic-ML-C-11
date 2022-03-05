@@ -5,6 +5,8 @@ import torch
 import numpy as np
 import heapq
 
+from LossNet import LossPred
+
 class ExperiencePool:
     def __init__(self, n_features, n_maxexps, n_clusters):
         self.n_features = n_features
@@ -14,6 +16,7 @@ class ExperiencePool:
         self.memory = np.zeros((self.n_maxexps, n_features))
         self.memory_iter = 0
         self.is_build = False
+        self.is_lossNet = False
 
     # 计算中心点之间的距离，大于最大距离则要新建一类
     def maxMinDisBetMeans(self):
@@ -165,9 +168,30 @@ class ExperiencePool:
             batch_data.append(self.memory[select_data[1], :])
             i += 1
         return np.array(batch_data)
+
+    def LossWeighted(self, batch_size):
+        heap = []
+        batch_data = []
+        if not self.is_lossNet:
+            self.LossPred = LossPred(self.n_features)
+            self.is_build = True
+        for data_id in range(self.n_maxexps):
+            loss = self.LossPred.pred(torch.FloatTensor(self.memory[data_id]))
+            heapq.heappush(heap, (-loss.item(), data_id))
+        i = 0
+        loss = 0
+        while i < batch_size:
+            select_data = heapq.heappop(heap)
+            batch_data.append(self.memory[select_data[1], :])
+            loss += -select_data[0]
+            i += 1
+        return np.array(batch_data)
+
+    def LossPredTrain(self, data, yhat_loss):
+        self.LossPred.train(data, yhat_loss)
     
     # 挑选样本
-    def sample(self, batch_size, model, select_mode, beta=0.5):
+    def sample(self, batch_size, model, select_mode, beta=0.9):
         if select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
@@ -182,6 +206,9 @@ class ExperiencePool:
 
         elif select_mode == "Density-Weighted":
             return self.DensityWeighted(batch_size, model, beta)
+        
+        elif select_mode == "LossPredict":
+            return self.LossWeighted(batch_size)
 
 
  
