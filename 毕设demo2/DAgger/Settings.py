@@ -1,3 +1,5 @@
+from tensorboardX import SummaryWriter
+WRITER = SummaryWriter("./log")
 # eval to net iteration
 ParaExchange = 100
 # Critic GAMMA
@@ -7,9 +9,9 @@ game_name = "CartPole-v0"
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
-epoch_num = 100
+epoch_num = 1000
 # batchsize
-batch_num = 32
+batch_num = 64
 # eps-action
 EPSILON = 0.9  
 # 

@@ -24,7 +24,7 @@ class DAgger_Pipeline(object):
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.CrossEntropyLoss()
-        self.ExpPool = ExperiencePool(n_features, 3000, 3)
+        self.ExpPool = ExperiencePool(n_features, 10000, 3)
         self.select_mode = select_mode
 
     def train(self, batch_size):
@@ -32,7 +32,8 @@ class DAgger_Pipeline(object):
         #actions = torch.from_numpy(np.array(actions))
         #dataDagger = TensorDataset(states, actions)
         #trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
-        total_loss = 0
+        actNet_loss = 0
+        selectNet_loss = 0
         batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
         states = torch.from_numpy(batch_data)
         for i in range(5):
@@ -41,7 +42,7 @@ class DAgger_Pipeline(object):
             actions = self.learner.forward(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
             loss = self.loss(actions, expert_a)
-            total_loss += loss.item()
+            actNet_loss += loss.item()
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
@@ -54,9 +55,9 @@ class DAgger_Pipeline(object):
                     loss = nn.CrossEntropyLoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
-                self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
 
-        return total_loss / 5
+        return actNet_loss / 5, selectNet_loss / 5
 
     def learner_action(self, state, EPSILON, N_ACTIONS):
         x = torch.unsqueeze(torch.FloatTensor(state), 0)
@@ -89,10 +90,11 @@ def main(select_mode, init_model):
     env = env.unwrapped
     n_actions = env.action_space.n
     n_features = env.observation_space.shape[0]
-    n_maxstep = 200
+    n_maxstep = 1000
     n_testtime = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
     RENDER = False
+    start = 0
     for epoch in range(epoch_num):
         mean_r = 0
         for time in range(n_testtime):
@@ -115,11 +117,18 @@ def main(select_mode, init_model):
                 s = s_
         mean_r /= n_testtime
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
-        mean_loss = 0
+        actNet_loss = 0
+        selectNet_loss = 0
         if pipeline.ExpPool.is_build:
-            mean_loss = pipeline.train(batch_num)
+            actNet_loss, selectNet_loss = pipeline.train(batch_num)
+            if start == 0:
+                start = epoch
+            WRITER.add_scalar('Reward/'+select_mode, mean_r, epoch-start)
+            WRITER.add_scalar('actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar('selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.flush()
         reward_log.append(mean_r)
-        loss_log.append(mean_loss)
+        loss_log.append(actNet_loss)
     
     del pipeline
     

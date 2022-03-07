@@ -188,7 +188,8 @@ class ExperiencePool:
         return np.array(batch_data)
 
     def LossPredTrain(self, data, yhat_loss):
-        self.LossPred.train(data, yhat_loss)
+        mean_loss = self.LossPred.train(data, yhat_loss)
+        return mean_loss
     
     # 挑选样本
     def sample(self, batch_size, model, select_mode, beta=0.9):

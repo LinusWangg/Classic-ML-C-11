@@ -30,10 +30,14 @@ class LossPred(object):
         return self.lossNet.forward(data)
     
     def train(self, data, yhat_loss):
+        mean_loss = 0
         for i in range(10):
             pred_res = self.pred(torch.from_numpy(data).to(torch.float32))
             loss = self.lossfunc(pred_res, yhat_loss)
+            mean_loss += loss.item()
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
+        mean_loss /= 10
+        return mean_loss
         
