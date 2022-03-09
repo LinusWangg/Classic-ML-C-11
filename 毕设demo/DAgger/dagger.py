@@ -1,4 +1,7 @@
+from gzip import READ
+from select import select
 import gym
+from transformers import pipeline
 from Settings import *
 from expert import Expert
 from learner import Learner
@@ -6,30 +9,57 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+import torch.nn.functional as F
+
+from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
-    def __init__(self, n_features, n_actions, lr=0.002):
+    
+    def __init__(self, n_features, n_actions, init_model, select_mode="Random", lr=0.002):
+        self.n_features = n_features
+        self.n_actions = n_actions
         self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/"+game_name+"_parameters.pth.tar")
-        self.expert.load_state_dict(parameters[game_name+'_ActorEval'])
+        parameters = torch.load("毕设demo/parameters/model.pk1")
+        self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions)
+        self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
-        self.loss = nn.MSELoss().requires_grad_()
+        self.loss = nn.MSELoss()
+        self.ExpPool = ExperiencePool(n_features, 10000, 3)
+        self.select_mode = select_mode
+ 
 
-    def train(self, states, actions):
-        states = torch.from_numpy(np.array(states))
-        actions = torch.from_numpy(np.array(actions))
-        dataDagger = TensorDataset(states, actions)
-        trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
+    def train(self, batch_size):
+        #states = torch.from_numpy(np.array(states))
+        #actions = torch.from_numpy(np.array(actions))
+        #dataDagger = TensorDataset(states, actions)
+        #trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
+        actNet_loss = 0
+        selectNet_loss = 0
+        batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
+        states = torch.from_numpy(batch_data)
         for i in range(5):
-            for s, a in trainData:
-                expert_a = self.expert_action(s)
-                a = a.to(torch.float64).requires_grad_()
-                expert_a = expert_a.to(torch.float64).requires_grad_()
-                loss = torch.mean((a-expert_a)**2)
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
+            #for s, a in zip(states, actions):
+            expert_a = self.expert_action(states).to(torch.float64)
+            actions = self.learner.forward(states.float()).to(torch.float64)
+            #expert_a = expert_a.to(torch.float64)
+            loss = self.loss(actions, expert_a)
+            actNet_loss += loss.item()
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
+
+            if self.select_mode == "LossPredict":
+                yhat_loss = []
+                for s in states:
+                    ex_a = self.expert_action(s).detach().to(torch.float64)
+                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                    loss = nn.MSELoss()
+                    y_hat = loss(lr_a, ex_a).item()
+                    yhat_loss.append([y_hat])
+                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+
+        return actNet_loss / 5, selectNet_loss / 5
 
     def learner_action(self, state):
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
@@ -41,41 +71,74 @@ class DAgger_Pipeline(object):
         actions = self.expert.forward(state)
         return actions[0].detach()
 
-def main():
+def main(select_mode, init_model):
+    reward_log = []
+    loss_log = []
     env = gym.make(game_name)
     env = env.unwrapped
     n_actions = env.action_space.shape[0]
     n_features = env.observation_space.shape[0]
-    pipeline = DAgger_Pipeline(n_features, n_actions)
-    a_bound = env.action_space.high
     a_low_bound = env.action_space.low
+    a_bound = env.action_space.high
+    var = 0.5
+    n_maxstep = 500
+    n_testtime = 5
+    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
+    RENDER = False
+    start = 0
     for epoch in range(epoch_num):
-        states = []
-        actions = []
-        s = env.reset()
-        ep_r = 0
-        done = False
-        for j in range(300):
-            #env.render()
-            a = pipeline.learner_action(s)
-            a = np.clip(np.random.normal(a, 3), a_low_bound, a_bound)
+        mean_r = 0
+        for time in range(n_testtime):
+            s = env.reset()
+            ep_r = 0
+            done = False
+            for j in range(n_maxstep):
+                if RENDER:
+                    env.render()
+                a = pipeline.learner_action(s)
+                a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
+                pipeline.ExpPool.add(s)
 
-            s_, r, done, info = env.step(a)
+                s_, r, done, info = env.step(a)
 
-            ep_r += r
-            states.append(s)
-            actions.append(a)
+                ep_r += r
+                if done or j>=n_maxstep-1:
+                    mean_r += ep_r
+                    break
+                
+                s = s_
+        mean_r /= n_testtime
+        print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
+        actNet_loss = 0
+        selectNet_loss = 0
+        if pipeline.ExpPool.is_build:
+            actNet_loss, selectNet_loss = pipeline.train(batch_num)
+            var *= 0.9995
+            if start == 0:
+                start = epoch
+            WRITER.add_scalar('Reward/'+select_mode, mean_r, epoch-start)
+            WRITER.add_scalar('actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar('selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.flush()
+        reward_log.append(mean_r)
+        loss_log.append(actNet_loss)
+    
+    del pipeline
+    
+    return {"reward_log":reward_log, "loss_log":loss_log}
 
-            if j == 199 or done:
-                print('Ep: ', epoch,
-                    '| Ep_r: ', round(ep_r, 2))
-            
-            if done:
-                break
-            s = s_
-        pipeline.train(states, actions)
+def save_log(log_file, file_path):
+    with open(file_path, "w") as f:
+        f.write(str(log_file))
 
 if __name__ == '__main__':
-    main()
+    np.random.seed(1)
+    init_model = Learner(3, 1)
+    select_mode = ["LossPredict", "Random", "MaxEntropy", "Density-Weighted", "maxDis2Center"]
+    log = {}
+    for mode in select_mode:
+        log[mode] = main(mode, init_model)
+    save_log(log, "log.txt")
+    
     
 

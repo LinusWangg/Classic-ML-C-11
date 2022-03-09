@@ -82,7 +82,7 @@ EPSILON = 0.9               # greedy policy
 GAMMA = 0.9                 # reward discount
 TARGET_REPLACE_ITER = 100   # target update frequency
 MEMORY_CAPACITY = 2000
-game_name = 'CartPole-v0'
+game_name = 'MountainCar-v0'
 env = gym.make(game_name)
 env = env.unwrapped
 N_ACTIONS = env.action_space.n
@@ -100,10 +100,10 @@ for i in range(400):
 
         s_, r, done, info = env.step(a)
 
-        x, x_dot, theta, theta_dot = s_
-        r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
-        r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
-        r = r1 + r2
+        #x, x_dot, theta, theta_dot = s_
+        #r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
+        #r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
+        #r = r1 + r2
 
         dqn.store_transition(s, a, r, s_, done, MEMORY_CAPACITY)
 
