@@ -14,18 +14,18 @@ import torch.nn.functional as F
 from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
-    
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", gap=0.5, lr=0.002):
+    def __init__(self, n_features, n_actions, init_model, n_timestep=4, select_mode="Random", lr=0.02):
         self.n_features = n_features
         self.n_actions = n_actions
+        self.n_timestep = n_timestep
         self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/model.pk1")
-        self.expert.load_state_dict(parameters['actor_eval'])
+        parameters = torch.load("毕设demo2_LSTM/parameters/"+game_name+"_parameters.pth.tar")
+        self.expert.load_state_dict(parameters[game_name+'_Eval'])
         self.learner = Learner(n_features, n_actions)
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
-        self.loss = nn.MSELoss()
-        self.ExpPool = ExperiencePool(n_features, 10000, 3)
+        self.loss = nn.CrossEntropyLoss()
+        self.ExpPool = ExperiencePool(n_features, 2000, 3, n_timestep)
         self.select_mode = select_mode
 
     def train(self, batch_size):
@@ -39,7 +39,7 @@ class DAgger_Pipeline(object):
         states = torch.from_numpy(batch_data)
         for i in range(5):
             #for s, a in zip(states, actions):
-            expert_a = self.expert_action(states).to(torch.float64)
+            expert_a = self.expert_action(states)
             actions = self.learner.forward(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
             loss = self.loss(actions, expert_a)
@@ -51,53 +51,68 @@ class DAgger_Pipeline(object):
             if self.select_mode == "LossPredict":
                 yhat_loss = []
                 for s in states:
-                    ex_a = self.expert_action(s).detach().to(torch.float64)
-                    lr_a = self.learner(s.float()).detach().to(torch.float64)
-                    loss = nn.MSELoss()
+                    ex_a = self.expert_action(s.reshape(1, s.shape[0]*s.shape[1])).detach()
+                    lr_a = self.learner(s.reshape(1, self.n_timestep, self.n_features).float()).to(torch.float64)
+                    loss = nn.CrossEntropyLoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                selectNet_loss += self.ExpPool.LossPredTrain(states.reshape(batch_size, self.n_timestep, self.n_features), torch.FloatTensor(yhat_loss))
 
         return actNet_loss / 5, selectNet_loss / 5
 
-    def learner_action(self, state):
-        state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
-        actions = self.learner.forward(state)
-        return actions[0].detach()
+    def learner_action(self, state, EPSILON, N_ACTIONS):
+        x = torch.FloatTensor(state.reshape(1, 1, self.n_features))
+
+        if np.random.uniform() < EPSILON:
+            actions_value = self.learner.forward(x)
+            action = torch.max(actions_value, 1)[1].data.numpy()
+            action = action[0]
+
+        else:
+            action = np.random.randint(0, N_ACTIONS)
+            action = action
+        
+        return action
 
     def expert_action(self, state):
-        state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
+        state = torch.from_numpy(np.array(state).reshape(state.shape[0]*self.n_timestep, self.n_features)).float()
         actions = self.expert.forward(state)
-        return actions[0].detach()
+        actions = actions.detach()
+        max_act = torch.max(actions, dim = 1).indices
+        max = torch.zeros(actions.shape)
+        for i in range(max.shape[0]):
+            max[i, max_act[i]] = 1.
+        return max_act
 
 def main(select_mode, init_model):
     reward_log = []
     loss_log = []
     env = gym.make(game_name)
     env = env.unwrapped
-    n_actions = env.action_space.shape[0]
+    n_actions = env.action_space.n
     n_features = env.observation_space.shape[0]
-    a_low_bound = env.action_space.low
-    a_bound = env.action_space.high
-    var = 0.5
-    n_maxstep = 500
+    n_maxstep = 1000
     n_testtime = 5
-    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
+    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, 4, select_mode)
     RENDER = False
     start = 0
     for epoch in range(epoch_num):
         mean_r = 0
         for time in range(n_testtime):
+            s_step = []
             s = env.reset()
             ep_r = 0
             done = False
             for j in range(n_maxstep):
                 if RENDER:
                     env.render()
-                a = pipeline.learner_action(s)
-                a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
-                pipeline.ExpPool.add(s)
-
+                a = pipeline.learner_action(s, EPSILON, n_actions)
+                if j!=0 and j%pipeline.ExpPool.n_timesteps==0:
+                    s_step = np.array(s_step).reshape(1, n_features*pipeline.ExpPool.n_timesteps)
+                    pipeline.ExpPool.add(s_step)
+                    s_step = [s]
+                else:
+                    s_step.append(s)
                 s_, r, done, info = env.step(a)
 
                 ep_r += r
@@ -112,7 +127,6 @@ def main(select_mode, init_model):
         selectNet_loss = 0
         if pipeline.ExpPool.is_build:
             actNet_loss, selectNet_loss = pipeline.train(batch_num)
-            var *= 0.9995
             if start == 0:
                 start = epoch
             WRITER.add_scalar('Reward/'+select_mode, mean_r, epoch-start)
@@ -132,8 +146,8 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(3, 1)
-    select_mode = ["Random", "LossPredict", "maxDis2Center"]
+    init_model = Learner(4, 2)
+    select_mode = ["Density-Weighted", "LossPredict", "Random", "MaxEntropy"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
