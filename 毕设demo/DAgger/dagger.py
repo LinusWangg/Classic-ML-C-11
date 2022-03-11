@@ -1,3 +1,4 @@
+from asyncio.windows_utils import pipe
 from gzip import READ
 from select import select
 import gym
@@ -15,7 +16,7 @@ from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", gap=0.5, lr=0.002):
+    def __init__(self, n_features, n_actions, init_model, select_mode="Random", low_bound=-2, high_bound=2, gap=0.5, lr=0.002):
         self.n_features = n_features
         self.n_actions = n_actions
         self.expert = Expert(n_features, n_actions)
@@ -27,6 +28,9 @@ class DAgger_Pipeline(object):
         self.loss = nn.MSELoss()
         self.ExpPool = ExperiencePool(n_features, 10000, 3)
         self.select_mode = select_mode
+        self.gap = gap
+        self.low_bound = low_bound - gap/2
+        self.high_bound = high_bound + gap/2
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -51,10 +55,38 @@ class DAgger_Pipeline(object):
             if self.select_mode == "LossPredict":
                 yhat_loss = []
                 for s in states:
-                    ex_a = self.expert_action(s).detach().to(torch.float64)
-                    lr_a = self.learner(s.float()).detach().to(torch.float64)
-                    loss = nn.MSELoss()
-                    y_hat = loss(lr_a, ex_a).item()
+                    ex_a = self.expert_action(s).detach().to(torch.float64).item()
+                    low = self.low_bound
+
+                    ex_ = 0 #替死
+                    while low < ex_a:
+                        low += self.gap
+                        if low > ex_a:
+                            break
+                        ex_ += 1
+                    ex_a_ = torch.zeros(1)
+                    ex_a_[0] = ex_
+                    ex_a_ = ex_a_.to(torch.long)
+
+                    lr_a = self.learner(s.float()).detach().to(torch.float64).item()
+                    lr_a_ = []
+                    low = self.low_bound
+                    dir = 1.1
+                    step = 1
+                    while low < self.high_bound:
+                        low += self.gap
+                        if low > lr_a and lr_a > low-self.gap:
+                            lr_a_.append(5)
+                            dir = 0.9
+                            step *= dir
+                            continue
+                        lr_a_.append(step)
+                        step *= dir
+                    lr_a_ = torch.Tensor(lr_a_)
+                    lr_a_ = torch.softmax(lr_a_, dim=0)
+                    lr_a_ = lr_a_.unsqueeze(0)
+                    loss = nn.CrossEntropyLoss()
+                    y_hat = loss(lr_a_, ex_a_).item()
                     yhat_loss.append([y_hat])
                 selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
 
@@ -83,6 +115,8 @@ def main(select_mode, init_model):
     n_maxstep = 500
     n_testtime = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
+    pipeline.low_bound = a_low_bound[0] - pipeline.gap / 2
+    pipeline.high_bound = a_bound[0] + pipeline.gap / 2
     RENDER = False
     start = 0
     for epoch in range(epoch_num):
@@ -133,7 +167,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(3, 1)
-    select_mode = ["Random", "LossPredict", "maxDis2Center"]
+    select_mode = ["LossPredict", "Random"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
