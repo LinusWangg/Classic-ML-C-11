@@ -26,6 +26,7 @@ class DAgger_Pipeline(object):
         self.loss = nn.CrossEntropyLoss()
         self.ExpPool = ExperiencePool(n_features, 10000, 3)
         self.select_mode = select_mode
+        self.lamda = 0.1
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -35,27 +36,47 @@ class DAgger_Pipeline(object):
         actNet_loss = 0
         selectNet_loss = 0
         batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
-        states = torch.from_numpy(batch_data)
+        states = torch.from_numpy(batch_data).to(torch.float32)
         for i in range(5):
             #for s, a in zip(states, actions):
             expert_a = self.expert_action(states)
             actions = self.learner.forward(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
-            loss = self.loss(actions, expert_a)
-            actNet_loss += loss.item()
-            self.optim.zero_grad()
-            loss.backward()
-            self.optim.step()
-
             if self.select_mode == "LossPredict":
-                yhat_loss = []
-                for s in states:
-                    ex_a = self.expert_action(s.reshape(1, 1, s.shape[0])).detach()
-                    lr_a = torch.unsqueeze(self.learner(s.float()).to(torch.float64), 0)
+                total_loss = 0
+                loss1 = self.loss(actions, expert_a)
+                actNet_loss += loss1.item()
+                l_hat = self.ExpPool.LossPred.pred(states)
+                loss2 = []
+                for i in range(0, len(expert_a), 2):
+                    j = i+1
                     loss = nn.CrossEntropyLoss()
-                    y_hat = loss(lr_a, ex_a).item()
-                    yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a[i], 0))
+                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a[j], 0))
+                    loss2.append(max(0, -torch.sign(loss_i-loss_j))*(l_hat[i]-l_hat[j]+1e-6))
+                loss2 = torch.mean(torch.FloatTensor(loss2))
+                selectNet_loss += loss2.item()
+                total_loss = loss1 + self.lamda * loss2
+                self.optim.zero_grad()
+                total_loss.backward()
+                self.optim.step()
+                
+            else:
+                loss = self.loss(actions, expert_a)
+                actNet_loss += loss.item()
+                self.optim.zero_grad()
+                loss.backward()
+                self.optim.step()
+
+            #if self.select_mode == "LossPredict":
+            #    yhat_loss = []
+            #    for s in states:
+            #        ex_a = self.expert_action(s.reshape(1, 1, s.shape[0])).detach()
+            #        lr_a = torch.unsqueeze(self.learner(s.float()).to(torch.float64), 0)
+            #        loss = nn.CrossEntropyLoss()
+            #        y_hat = loss(lr_a, ex_a).item()
+            #        yhat_loss.append([y_hat])
+            #    selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
 
         return actNet_loss / 5, selectNet_loss / 5
 
@@ -141,7 +162,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(4, 2)
-    select_mode = ["LossPredict", "Random", "MaxEntropy", "Density-Weighted", "maxDis2Center"]
+    select_mode = ["Random", "MaxEntropy", "Density-Weighted", "maxDis2Center", "LossPredict"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
