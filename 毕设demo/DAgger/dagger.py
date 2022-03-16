@@ -11,12 +11,13 @@ import numpy as np
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
+import itertools
 
 from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", low_bound=-2, high_bound=2, gap=0.5, lr=0.002):
+    def __init__(self, n_features, n_actions, init_model, select_mode="Random", lr=0.002):
         self.n_features = n_features
         self.n_actions = n_actions
         self.expert = Expert(n_features, n_actions)
@@ -28,9 +29,8 @@ class DAgger_Pipeline(object):
         self.loss = nn.MSELoss()
         self.ExpPool = ExperiencePool(n_features, 10000, 3)
         self.select_mode = select_mode
-        self.gap = gap
-        self.low_bound = low_bound - gap/2
-        self.high_bound = high_bound + gap/2
+        self.lamda = 0.1
+        self.lr = lr
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -40,56 +40,38 @@ class DAgger_Pipeline(object):
         actNet_loss = 0
         selectNet_loss = 0
         batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
-        states = torch.from_numpy(batch_data)
+        states = torch.from_numpy(batch_data).to(torch.float32)
         for i in range(5):
             #for s, a in zip(states, actions):
             expert_a = self.expert_action(states).to(torch.float64)
             actions = self.learner.forward(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
-            loss = self.loss(actions, expert_a)
-            actNet_loss += loss.item()
-            self.optim.zero_grad()
-            loss.backward()
-            self.optim.step()
-
             if self.select_mode == "LossPredict":
-                yhat_loss = []
-                for s in states:
-                    ex_a = self.expert_action(s).detach().to(torch.float64).item()
-                    low = self.low_bound
-
-                    ex_ = 0 #替死
-                    while low < ex_a:
-                        low += self.gap
-                        if low > ex_a:
-                            break
-                        ex_ += 1
-                    ex_a_ = torch.zeros(1)
-                    ex_a_[0] = ex_
-                    ex_a_ = ex_a_.to(torch.long)
-
-                    lr_a = self.learner(s.float()).detach().to(torch.float64).item()
-                    lr_a_ = []
-                    low = self.low_bound
-                    dir = 1.1
-                    step = 1
-                    while low < self.high_bound:
-                        low += self.gap
-                        if low > lr_a and lr_a > low-self.gap:
-                            lr_a_.append(5)
-                            dir = 0.9
-                            step *= dir
-                            continue
-                        lr_a_.append(step)
-                        step *= dir
-                    lr_a_ = torch.Tensor(lr_a_)
-                    lr_a_ = torch.softmax(lr_a_, dim=0)
-                    lr_a_ = lr_a_.unsqueeze(0)
-                    loss = nn.CrossEntropyLoss()
-                    y_hat = loss(lr_a_, ex_a_).item()
-                    yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
-
+                total_loss = 0
+                loss1 = self.loss(actions, expert_a)
+                actNet_loss += loss1.item()
+                l_hat = self.ExpPool.LossPred.pred(states)
+                loss2 = []
+                for i in range(0, len(expert_a), 2):
+                    j = i+1
+                    loss = nn.MSELoss()
+                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a, 0))
+                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a, 0))
+                    loss2.append(max(0, -torch.sign(loss_i-loss_j))*(l_hat[i]-l_hat[j]+1e-6))
+                loss2 = torch.mean(torch.FloatTensor(loss2))
+                selectNet_loss += loss2.item()
+                total_loss = loss1 + self.lamda * loss2
+                optim = torch.optim.Adam(itertools.chain(self.learner.parameters(), self.ExpPool.LossPred.lossNet.parameters()), lr=self.lr)
+                optim.zero_grad()
+                total_loss.backward()
+                optim.step()
+                
+            else:
+                loss = self.loss(actions, expert_a)
+                actNet_loss += loss.item()
+                self.optim.zero_grad()
+                loss.backward()
+                self.optim.step()
         return actNet_loss / 5, selectNet_loss / 5
 
     def learner_action(self, state):
@@ -115,8 +97,6 @@ def main(select_mode, init_model):
     n_maxstep = 500
     n_testtime = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
-    pipeline.low_bound = a_low_bound[0] - pipeline.gap / 2
-    pipeline.high_bound = a_bound[0] + pipeline.gap / 2
     RENDER = False
     start = 0
     for epoch in range(epoch_num):

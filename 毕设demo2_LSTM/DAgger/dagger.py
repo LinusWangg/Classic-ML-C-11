@@ -10,6 +10,7 @@ import numpy as np
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
+import itertools
 
 from ExpirencePool import ExperiencePool
 
@@ -28,6 +29,7 @@ class DAgger_Pipeline(object):
         self.ExpPool = ExperiencePool(n_features, 2000, 3, n_timestep)
         self.select_mode = select_mode
         self.lamda = 0.3
+        self.lr = lr
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -57,9 +59,10 @@ class DAgger_Pipeline(object):
                 loss2 = torch.mean(torch.FloatTensor(loss2))
                 selectNet_loss += loss2.item()
                 total_loss = loss1 + self.lamda * loss2
-                self.optim.zero_grad()
+                optim = torch.optim.Adam(itertools.chain(self.learner.parameters(), self.ExpPool.LossPred.lossNet.parameters()), lr=self.lr)
+                optim.zero_grad()
                 total_loss.backward()
-                self.optim.step()
+                optim.step()
                 
             else:
                 loss = self.loss(actions, expert_a)
