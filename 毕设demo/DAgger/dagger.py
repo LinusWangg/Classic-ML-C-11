@@ -12,8 +12,10 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
 import itertools
+from prioritized_memory import Memory
 
 from ExpirencePool import ExperiencePool
+from LossNet import LossPred
 
 class DAgger_Pipeline(object):
     
@@ -27,10 +29,14 @@ class DAgger_Pipeline(object):
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.MSELoss()
-        self.ExpPool = ExperiencePool(n_features, 10000, 3)
         self.select_mode = select_mode
-        self.lamda = 0.1
+        self.lamda = 0.05
         self.lr = lr
+        if select_mode != "LossPRE":
+            self.ExpPool = ExperiencePool(n_features, 10000, 3)
+        elif select_mode == "LossPRE":
+            self.ExpPool = Memory(10000)
+            self.LossNet = LossPred(n_features)
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -39,7 +45,13 @@ class DAgger_Pipeline(object):
         #trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
         actNet_loss = 0
         selectNet_loss = 0
-        batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
+        batch_data = []
+        idxs = []
+        weight = []
+        if self.select_mode == "LossPredict":
+            batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
+        elif self.select_mode == "LossPRE":
+            batch_data, idxs, weight = self.ExpPool.sample(batch_size)
         states = torch.from_numpy(batch_data).to(torch.float32)
         for i in range(5):
             #for s, a in zip(states, actions):
@@ -55,8 +67,8 @@ class DAgger_Pipeline(object):
                 for i in range(0, len(expert_a), 2):
                     j = i+1
                     loss = nn.MSELoss()
-                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a, 0))
-                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a, 0))
+                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a[i], 0))
+                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a[j], 0))
                     loss2.append(max(0, -torch.sign(loss_i-loss_j))*(l_hat[i]-l_hat[j]+1e-6))
                 loss2 = torch.mean(torch.FloatTensor(loss2))
                 selectNet_loss += loss2.item()
@@ -65,6 +77,26 @@ class DAgger_Pipeline(object):
                 optim.zero_grad()
                 total_loss.backward()
                 optim.step()
+            elif self.select_mode == "LossPRE":
+                loss = self.loss(actions, expert_a)
+                actNet_loss += loss.item()
+                self.optim.zero_grad()
+                loss.backward()
+                self.optim.step()
+                
+                yhat_loss = []
+                for s in states:
+                    ex_a = self.expert_action(s).detach().to(torch.float64)
+                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                    loss = nn.MSELoss()
+                    y_hat = loss(lr_a, ex_a).item()
+                    yhat_loss.append([y_hat])
+                selectNet_loss += self.LossNet.train(batch_data, torch.FloatTensor(yhat_loss))
+                
+                for i in range(batch_num):
+                    idx = idxs[i]
+                    error = self.LossNet.lossNet(states[i]).detach()
+                    self.ExpPool.update(idx, error)
                 
             else:
                 loss = self.loss(actions, expert_a)
@@ -110,7 +142,13 @@ def main(select_mode, init_model):
                     env.render()
                 a = pipeline.learner_action(s)
                 a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
-                pipeline.ExpPool.add(s)
+
+                if select_mode == "LossPredict":
+                    pipeline.ExpPool.add(s)
+                elif select_mode == "LossPRE":
+                    now_s = s
+                    error = pipeline.LossNet.lossNet(torch.from_numpy(s).to(torch.float32)).detach()
+                    pipeline.ExpPool.add(error, now_s)
 
                 s_, r, done, info = env.step(a)
 
@@ -124,14 +162,25 @@ def main(select_mode, init_model):
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
         actNet_loss = 0
         selectNet_loss = 0
-        if pipeline.ExpPool.is_build:
+        if select_mode == "LossPredict" and pipeline.ExpPool.is_build:
             actNet_loss, selectNet_loss = pipeline.train(batch_num)
             var *= 0.9995
             if start == 0:
                 start = epoch
-            WRITER.add_scalar('Reward/'+select_mode, mean_r, epoch-start)
-            WRITER.add_scalar('actNetLoss/'+select_mode, actNet_loss, epoch-start)
-            WRITER.add_scalar('selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
+            WRITER.add_scalar(game_name+'/actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.flush()
+        
+        elif select_mode == "LossPRE" and pipeline.ExpPool.tree.n_entries >= pipeline.ExpPool.tree.capacity:
+            print("Updating", end=" ")
+            actNet_loss, selectNet_loss = pipeline.train(batch_num)
+            var *= 0.9995
+            if start == 0:
+                start = epoch
+            WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
+            WRITER.add_scalar(game_name+'/actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
             WRITER.flush()
         reward_log.append(mean_r)
         loss_log.append(actNet_loss)
@@ -147,7 +196,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(3, 1)
-    select_mode = ["LossPredict", "Random"]
+    select_mode = ["LossPRE", "LossPredict", "Random"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)

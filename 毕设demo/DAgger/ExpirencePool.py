@@ -58,18 +58,11 @@ class ExperiencePool:
     # updateMode 1-插入 -1-删除 
     def updateMeans(self, data, updateMode):
         center_id, center_dis = self.dis2selfcenter(data)
-        if center_dis > self.minMeanDis and updateMode == 1:
-            center_id = self.n_clusters
-            self.n_clusters += 1
-            self.cluster_mean = np.append(self.cluster_mean, data.reshape(1, data.shape[0]), axis=0)
-            for center in self.cluster_mean:
-                center, _ = self.updateMean(data, center, 1)
-        else:
-            for id in range(self.n_clusters):
-                if center_id == id:
-                    self.cluster_mean[id], _ = self.updateMean(data, self.cluster_mean[id], -1 * updateMode)
-                    continue
-                self.cluster_mean[id], _ = self.updateMean(data, self.cluster_mean[id], 1 * updateMode)
+        for id in range(self.n_clusters):
+            if center_id == id:
+                self.cluster_mean[id], _ = self.updateMean(data, self.cluster_mean[id], -1 * updateMode)
+                continue
+            self.cluster_mean[id], _ = self.updateMean(data, self.cluster_mean[id], 1 * updateMode)
 
     # 添加数据
     # 若未建立且未满则直接插入
@@ -80,19 +73,19 @@ class ExperiencePool:
         self.memory_iter += 1
         if self.memory_iter == self.n_maxexps:
             self.kmeans = KMeans( 
-                n_clusters = 3,
+                n_clusters = 15,
                 n_init = 10,
                 max_iter = 300,
                 init = 'k-means++',
                 ).fit(self.memory)
             print("------------------K-Means建立------------------")
             self.cluster_mean = self.kmeans.cluster_centers_
-            self.n_clusters = 3
+            self.n_clusters = 15
             self.is_build = True
             self.maxMinDisBetMeans()
-        elif self.is_build:
-            self.updateMeans(data, 1)
-            self.updateMeans(copy, -1)
+        #elif self.is_build:
+        #    self.updateMeans(data, 1)
+        #    self.updateMeans(copy, -1)
         self.memory_iter %= self.n_maxexps
 
     # 挑选离k-means中心最远的点
@@ -170,20 +163,24 @@ class ExperiencePool:
         return np.array(batch_data)
 
     def LossWeighted(self, batch_size):
-        heap = []
+        heap = [[] for i in range(self.n_clusters)]
         batch_data = []
         if not self.is_lossNet:
             self.LossPred = LossPred(self.n_features)
             self.is_build = True
         for data_id in range(self.n_maxexps):
+            center_id, center_dis = self.dis2selfcenter(self.memory[data_id])
             loss = self.LossPred.pred(torch.FloatTensor(self.memory[data_id]))
-            heapq.heappush(heap, (-loss.item(), data_id))
+            heapq.heappush(heap[center_id], (-loss.item(), data_id))
         i = 0
-        loss = 0
+        t = 0
         while i < batch_size:
-            select_data = heapq.heappop(heap)
+            if len(heap[t%self.n_clusters])==0:
+                t += 1
+                continue
+            select_data = heapq.heappop(heap[t%self.n_clusters])
             batch_data.append(self.memory[select_data[1], :])
-            loss += -select_data[0]
+            t += 1
             i += 1
         return np.array(batch_data)
 

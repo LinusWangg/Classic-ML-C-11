@@ -15,7 +15,8 @@ class LossNet(nn.Module):
         x = self.layer1(x)
         x = F.relu(x)
         x = self.layer2(x)
-        return x
+        x = torch.tanh(x)
+        return x * 16
 
 class LossPred(object):
 

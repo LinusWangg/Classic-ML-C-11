@@ -92,7 +92,7 @@ for i in range(4000):
     s = env.reset()
     ep_r = 0
     while True:
-        env.render()
+        #env.render()
         a = dqn.choose_action(s, EPSILON, ENV_A_SHAPE, N_ACTIONS)
 
         s_, r, done, info = env.step(a)
