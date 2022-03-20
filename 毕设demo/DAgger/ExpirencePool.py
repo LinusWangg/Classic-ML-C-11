@@ -6,14 +6,19 @@ import numpy as np
 import heapq
 
 from LossNet import LossPred
+from prioritized_memory import Memory
 
 class ExperiencePool:
-    def __init__(self, n_features, n_maxexps, n_clusters):
+    def __init__(self, n_features, n_maxexps, n_clusters, select_mode="Random"):
         self.n_features = n_features
         self.n_exps = 0
         self.n_maxexps = n_maxexps
         self.n_clusters = n_clusters
-        self.memory = np.zeros((self.n_maxexps, n_features))
+        self.select_mode = select_mode
+        if select_mode != "LossPER":
+            self.memory = np.zeros((self.n_maxexps, n_features))
+        elif select_mode == "LossPER":
+            self.memory = Memory(n_maxexps)
         self.memory_iter = 0
         self.is_build = False
         self.is_lossNet = False
@@ -68,25 +73,43 @@ class ExperiencePool:
     # 若未建立且未满则直接插入
     # 若建立了则将过时信息删去并调整中心点
     def add(self, data):
-        copy = self.memory[self.memory_iter]
-        self.memory[self.memory_iter] = data
-        self.memory_iter += 1
-        if self.memory_iter == self.n_maxexps:
-            self.kmeans = KMeans( 
-                n_clusters = 15,
-                n_init = 10,
-                max_iter = 300,
-                init = 'k-means++',
-                ).fit(self.memory)
-            print("------------------K-Means建立------------------")
-            self.cluster_mean = self.kmeans.cluster_centers_
-            self.n_clusters = 15
-            self.is_build = True
-            self.maxMinDisBetMeans()
-        #elif self.is_build:
-        #    self.updateMeans(data, 1)
-        #    self.updateMeans(copy, -1)
-        self.memory_iter %= self.n_maxexps
+        if self.select_mode != "LossPER":
+            copy = self.memory[self.memory_iter]
+            self.memory[self.memory_iter] = data
+            self.memory_iter += 1
+            if self.memory_iter == self.n_maxexps:
+                self.kmeans = KMeans( 
+                    n_clusters = 15,
+                    n_init = 10,
+                    max_iter = 300,
+                    init = 'k-means++',
+                    ).fit(self.memory)
+                print("------------------K-Means建立------------------")
+                self.cluster_mean = self.kmeans.cluster_centers_
+                self.n_clusters = 15
+                self.is_build = True
+                self.maxMinDisBetMeans()
+            #elif self.is_build:
+            #    self.updateMeans(data, 1)
+            #    self.updateMeans(copy, -1)
+            self.memory_iter %= self.n_maxexps
+        elif self.select_mode == "LossPER":
+            if not self.is_lossNet:
+                self.LossPred = LossPred(self.n_features)
+                self.is_lossNet = True
+            self.memory_iter += 1
+            now_data = data
+            self.memory.add(self.LossPred.lossNet(torch.from_numpy(data).to(torch.float32)).detach(), now_data)
+            if self.memory_iter == self.n_maxexps:
+                self.is_build = True
+            self.memory_iter %= self.n_maxexps
+
+    # SumTree的update
+    def update_SumTree(self, batch_num, idxs, states):
+        for i in range(batch_num):
+            idx = idxs[i]
+            error = self.LossPred.lossNet(states[i]).detach()
+            self.memory.update(idx, error)
 
     # 挑选离k-means中心最远的点
     def maxDis2Center_Sample(self, batch_size):
@@ -184,29 +207,35 @@ class ExperiencePool:
             i += 1
         return np.array(batch_data)
 
+    def LossPER(self, batch_size):
+        return self.memory.sample(batch_size)
+
     def LossPredTrain(self, data, yhat_loss):
         mean_loss = self.LossPred.train(data, yhat_loss)
         return mean_loss
     
     # 挑选样本
-    def sample(self, batch_size, model, select_mode, beta=0.9):
-        if select_mode == "maxDis2Center":
+    def sample(self, batch_size, model, beta=0.9):
+        if self.select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
-        elif select_mode == "Random":
+        elif self.select_mode == "Random":
             return self.Random_Sample(batch_size)
         
         #elif select_mode == "MaxEntropy":
         #    return self.maxEntropy_Sample(batch_size, model)
 
-        elif select_mode == "QueryByCommittee":
+        elif self.select_mode == "QueryByCommittee":
             return self.QueryByCommittee(batch_size, model)
 
-        elif select_mode == "Density-Weighted":
+        elif self.select_mode == "Density-Weighted":
             return self.DensityWeighted(batch_size, model, beta)
         
-        elif select_mode == "LossPredict":
+        elif self.select_mode == "LossPredict":
             return self.LossWeighted(batch_size)
+
+        elif self.select_mode == "LossPER":
+            return self.LossPER(batch_size)
 
 
  
