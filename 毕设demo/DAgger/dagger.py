@@ -29,7 +29,7 @@ class DAgger_Pipeline(object):
         self.select_mode = select_mode
         self.lamda = 0.05
         self.lr = lr
-        self.ExpPool = ExperiencePool(n_features, 10000, 3, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 10000, 7, select_mode)
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))

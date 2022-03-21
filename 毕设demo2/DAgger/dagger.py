@@ -25,7 +25,7 @@ class DAgger_Pipeline(object):
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.CrossEntropyLoss()
-        self.ExpPool = ExperiencePool(n_features, 10000, 3)
+        self.ExpPool = ExperiencePool(n_features, 10000, 7, select_mode)
         self.select_mode = select_mode
         self.lamda = 0.2
         self.lr = lr
@@ -37,7 +37,13 @@ class DAgger_Pipeline(object):
         #trainData = DataLoader(dataset=dataDagger, batch_size=batch_num, shuffle=True)
         actNet_loss = 0
         selectNet_loss = 0
-        batch_data = self.ExpPool.sample(batch_size, self.learner, self.select_mode)
+        batch_data = []
+        idxs = []
+        weight = []
+        if self.select_mode != "LossPER":
+            batch_data = self.ExpPool.sample(batch_size, self.learner)
+        elif self.select_mode == "LossPER":
+            batch_data, idxs, weight = self.ExpPool.sample(batch_size, self.learner)
         states = torch.from_numpy(batch_data).to(torch.float32)
         for i in range(5):
             #for s, a in zip(states, actions):
@@ -63,6 +69,24 @@ class DAgger_Pipeline(object):
                 optim.zero_grad()
                 total_loss.backward()
                 optim.step()
+            
+            elif self.select_mode == "LossPER":
+                loss = self.loss(actions, expert_a)
+                actNet_loss += loss.item()
+                self.optim.zero_grad()
+                loss.backward()
+                self.optim.step()
+
+                yhat_loss = []
+                for s in states:
+                    ex_a = self.expert_action(s).detach().to(torch.float64)
+                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                    loss = nn.CrossEntropyLoss()
+                    y_hat = loss(lr_a, ex_a).item()
+                    yhat_loss.append([y_hat])
+                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                
+                self.ExpPool.update_SumTree(batch_num, idxs, states)
                 
             else:
                 loss = self.loss(actions, expert_a)
@@ -70,16 +94,6 @@ class DAgger_Pipeline(object):
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
-
-            #if self.select_mode == "LossPredict":
-            #    yhat_loss = []
-            #    for s in states:
-            #        ex_a = self.expert_action(s.reshape(1, 1, s.shape[0])).detach()
-            #        lr_a = torch.unsqueeze(self.learner(s.float()).to(torch.float64), 0)
-            #        loss = nn.CrossEntropyLoss()
-            #        y_hat = loss(lr_a, ex_a).item()
-            #        yhat_loss.append([y_hat])
-            #    selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
 
         return actNet_loss / 5, selectNet_loss / 5
 
@@ -143,13 +157,15 @@ def main(select_mode, init_model):
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
         actNet_loss = 0
         selectNet_loss = 0
+
         if pipeline.ExpPool.is_build:
+            print("Updating", end=" ")
             actNet_loss, selectNet_loss = pipeline.train(batch_num)
             if start == 0:
                 start = epoch
-            WRITER.add_scalar('Reward/'+select_mode, mean_r, epoch-start)
-            WRITER.add_scalar('actNetLoss/'+select_mode, actNet_loss, epoch-start)
-            WRITER.add_scalar('selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
+            WRITER.add_scalar(game_name+'actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
             WRITER.flush()
         reward_log.append(mean_r)
         loss_log.append(actNet_loss)
@@ -165,7 +181,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(4, 2)
-    select_mode = ["LossPredict", "Random", "MaxEntropy", "Density-Weighted", "maxDis2Center"]
+    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted", "maxDis2Center"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)

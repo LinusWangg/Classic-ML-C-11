@@ -79,14 +79,13 @@ class ExperiencePool:
             self.memory_iter += 1
             if self.memory_iter == self.n_maxexps:
                 self.kmeans = KMeans( 
-                    n_clusters = 15,
+                    n_clusters = self.n_clusters,
                     n_init = 10,
                     max_iter = 300,
                     init = 'k-means++',
                     ).fit(self.memory)
                 print("------------------K-Means建立------------------")
                 self.cluster_mean = self.kmeans.cluster_centers_
-                self.n_clusters = 15
                 self.is_build = True
                 self.maxMinDisBetMeans()
             #elif self.is_build:

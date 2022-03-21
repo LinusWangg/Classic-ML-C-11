@@ -1,5 +1,5 @@
 from tensorboardX import SummaryWriter
-WRITER = SummaryWriter("./log2")
+WRITER = SummaryWriter("./log-离散")
 # eval to net iteration
 ParaExchange = 100
 # Critic GAMMA
