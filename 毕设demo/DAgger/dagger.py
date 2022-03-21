@@ -176,7 +176,7 @@ if __name__ == '__main__':
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
-    save_log(log, "log.txt")
+    save_log(log, "log-"+game_name+".json")
     
     
 
