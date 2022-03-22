@@ -167,8 +167,8 @@ def main(select_mode, init_model):
             WRITER.add_scalar(game_name+'actNetLoss/'+select_mode, actNet_loss, epoch-start)
             WRITER.add_scalar(game_name+'selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
             WRITER.flush()
-        reward_log.append(mean_r)
-        loss_log.append(actNet_loss)
+            reward_log.append(mean_r)
+            loss_log.append(actNet_loss)
     
     del pipeline
     

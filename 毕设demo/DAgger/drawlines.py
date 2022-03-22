@@ -28,8 +28,8 @@ def draw_pic(log_path, eps):
                 linestyle_opts=opts.LineStyleOpts(width=2,type_='solid')
             )
             i += 1
-        line.render('log.html')
+        line.render('log-'+game_name+'.html')
 
 
 if __name__ == '__main__':
-    draw_pic("log.json", 0.99)
+    draw_pic("log-"+game_name+".json", 0.99)
