@@ -185,24 +185,18 @@ class ExperiencePool:
         return np.array(batch_data)
 
     def LossWeighted(self, batch_size):
-        heap = [[] for i in range(self.n_clusters)]
+        heap = []
         batch_data = []
         if not self.is_lossNet:
             self.LossPred = LossPred(self.n_features)
             self.is_build = True
         for data_id in range(self.n_maxexps):
-            center_id, center_dis = self.dis2selfcenter(self.memory[data_id])
             loss = self.LossPred.pred(torch.FloatTensor(self.memory[data_id]))
-            heapq.heappush(heap[center_id], (-loss.item(), data_id))
+            heapq.heappush(heap, (-loss.item(), data_id))
         i = 0
-        t = 0
         while i < batch_size:
-            if len(heap[t%self.n_clusters])==0:
-                t += 1
-                continue
-            select_data = heapq.heappop(heap[t%self.n_clusters])
+            select_data = heapq.heappop(heap)
             batch_data.append(self.memory[select_data[1], :])
-            t += 1
             i += 1
         return np.array(batch_data)
 

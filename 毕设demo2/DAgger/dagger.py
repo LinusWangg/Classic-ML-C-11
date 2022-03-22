@@ -184,7 +184,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(4, 2)
-    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
+    select_mode = ["LossPredict", "LossPER", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
