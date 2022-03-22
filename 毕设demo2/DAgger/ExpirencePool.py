@@ -98,7 +98,7 @@ class ExperiencePool:
                 self.is_lossNet = True
             self.memory_iter += 1
             now_data = data
-            self.memory.add(self.LossPred.lossNet(torch.from_numpy(data).to(torch.float32)).detach(), now_data)
+            self.memory.add(abs(self.LossPred.lossNet(torch.from_numpy(data).to(torch.float32)).detach().item()), now_data)
             if self.memory_iter == self.n_maxexps:
                 self.is_build = True
             self.memory_iter %= self.n_maxexps
@@ -215,8 +215,8 @@ class ExperiencePool:
         elif self.select_mode == "Random":
             return self.Random_Sample(batch_size)
         
-        #elif select_mode == "MaxEntropy":
-        #    return self.maxEntropy_Sample(batch_size, model)
+        elif self.select_mode == "MaxEntropy":
+            return self.maxEntropy_Sample(batch_size, model)
 
         elif self.select_mode == "QueryByCommittee":
             return self.QueryByCommittee(batch_size, model)

@@ -27,7 +27,7 @@ class DAgger_Pipeline(object):
         self.loss = nn.CrossEntropyLoss()
         self.ExpPool = ExperiencePool(n_features, 10000, n_clusters, select_mode)
         self.select_mode = select_mode
-        self.lamda = 0.2
+        self.lamda = 0.15
         self.lr = lr
 
     def train(self, batch_size):
@@ -184,7 +184,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(4, 2)
-    select_mode = ["LossPredict", "LossPER", "Random", "MaxEntropy", "Density-Weighted"]
+    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
