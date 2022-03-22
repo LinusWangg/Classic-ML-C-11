@@ -15,7 +15,7 @@ import itertools
 from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", lr=0.02):
+    def __init__(self, n_features, n_actions, init_model, select_mode="Random", n_clusters=1, lr=0.02):
         self.n_features = n_features
         self.n_actions = n_actions
         self.expert = Expert(n_features, n_actions)
@@ -25,7 +25,7 @@ class DAgger_Pipeline(object):
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.CrossEntropyLoss()
-        self.ExpPool = ExperiencePool(n_features, 10000, 7, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 10000, n_clusters, select_mode)
         self.select_mode = select_mode
         self.lamda = 0.2
         self.lr = lr
@@ -130,7 +130,10 @@ def main(select_mode, init_model):
     n_features = env.observation_space.shape[0]
     n_maxstep = 1000
     n_testtime = 5
-    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
+    n_clusters = 8
+    if select_mode == "LossPredict":
+        n_clusters = 1
+    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode, n_clusters)
     RENDER = False
     start = 0
     for epoch in range(epoch_num):
@@ -164,8 +167,8 @@ def main(select_mode, init_model):
             if start == 0:
                 start = epoch
             WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
-            WRITER.add_scalar(game_name+'actNetLoss/'+select_mode, actNet_loss, epoch-start)
-            WRITER.add_scalar(game_name+'selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/actNetLoss/'+select_mode, actNet_loss, epoch-start)
+            WRITER.add_scalar(game_name+'/selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
             WRITER.flush()
             reward_log.append(mean_r)
             loss_log.append(actNet_loss)
@@ -181,7 +184,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(4, 2)
-    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted", "maxDis2Center"]
+    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
