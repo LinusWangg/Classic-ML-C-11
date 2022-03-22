@@ -79,8 +79,8 @@ class DAgger_Pipeline(object):
 
                 yhat_loss = []
                 for s in states:
-                    ex_a = self.expert_action(s).detach().to(torch.float64)
-                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                    ex_a = self.expert_action(s.reshape(1, 1, s.shape[0])).detach()
+                    lr_a = torch.unsqueeze(self.learner(s.float()).to(torch.float64), 0)
                     loss = nn.CrossEntropyLoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
