@@ -95,7 +95,8 @@ for i in range(400):
     s = env.reset()
     ep_r = 0
     while True:
-        #env.render()
+        if i > 250:
+            env.render()
         a = dqn.choose_action(s, EPSILON, ENV_A_SHAPE, N_ACTIONS)
 
         s_, r, done, info = env.step(a)

@@ -5,7 +5,7 @@ ParaExchange = 100
 # Critic GAMMA
 GAMMA = 0.9
 # GAME NAME
-game_name = "CartPole-v0"
+game_name = 'MountainCar-v0'
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
