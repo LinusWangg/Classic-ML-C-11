@@ -17,6 +17,6 @@ class Expert(nn.Module):
         x = F.relu(x)
         x = self.out(x)
         x = torch.tanh(x)
-        actions = x * 2
+        actions = x
         return actions
 

@@ -18,12 +18,12 @@ GAMMA = 0.99
 
 class DDPG(object):
     def __init__(self):
-        self.actor_eval = Policy(N_STATES, N_ACTIONS).cuda()
-        self.actor_target = Policy(N_STATES, N_ACTIONS).cuda()
-        self.critic_eval1 = Qvalue(N_STATES, N_ACTIONS).cuda()
-        self.critic_eval2 = Qvalue(N_STATES, N_ACTIONS).cuda()
-        self.critic_target1 = Qvalue(N_STATES, N_ACTIONS).cuda()
-        self.critic_target2 = Qvalue(N_STATES, N_ACTIONS).cuda()
+        self.actor_eval = Policy(N_STATES, N_ACTIONS)
+        self.actor_target = Policy(N_STATES, N_ACTIONS)
+        self.critic_eval1 = Qvalue(N_STATES, N_ACTIONS)
+        self.critic_eval2 = Qvalue(N_STATES, N_ACTIONS)
+        self.critic_target1 = Qvalue(N_STATES, N_ACTIONS)
+        self.critic_target2 = Qvalue(N_STATES, N_ACTIONS)
         self.memory_counter = 0
         self.memory = np.zeros((MEMORY_CAPACITY, N_STATES*2 + N_ACTIONS + 1), dtype=np.float32)
         self.actor_target.load_state_dict(self.actor_eval.state_dict())
@@ -32,8 +32,8 @@ class DDPG(object):
         self.actor_opt = torch.optim.Adam(self.actor_eval.parameters(), LR)
         self.critic_opt1 = torch.optim.Adam(self.critic_eval1.parameters(), LR)
         self.critic_opt2 = torch.optim.Adam(self.critic_eval2.parameters(), LR)
-        self.critic_loss1 = nn.MSELoss().cuda()
-        self.critic_loss2 = nn.MSELoss().cuda()
+        self.critic_loss1 = nn.MSELoss()
+        self.critic_loss2 = nn.MSELoss()
         self.critic_update = 0
         self.policy_delay = 3
 
@@ -46,7 +46,7 @@ class DDPG(object):
     def select_action(self, s, a_bound):
         #连续
         s = torch.from_numpy(s).float().unsqueeze(0)
-        actions = self.actor_eval.forward(s.cuda(), a_bound.cuda())
+        actions = self.actor_eval.forward(s, a_bound)
         return actions.cpu().detach().numpy()
         #离散
         #s = torch.from_numpy(s).float().unsqueeze(0)
@@ -67,17 +67,17 @@ class DDPG(object):
         #    b_amat[i, index[i]] = 1.
 
         # Target Policy Smoothing Regularization
-        a_next1 = self.actor_target(b_s_.cuda(), a_bound.cuda())
-        a_next1 = torch.clip(torch.normal(a_next1, 0.1), a_low_bound.cuda(), a_bound.cuda())
+        a_next1 = self.actor_target(b_s_, a_bound)
+        a_next1 = torch.clip(torch.normal(a_next1, 0.1), a_low_bound, a_bound)
         #argmax_a = torch.argmax(a_next, axis=1)
         #a_next_mat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
         #for i in range(BATCH_SIZE):
         #    a_next_mat[i, argmax_a[i]] = 1.
-        q_next1 = self.critic_target1(b_s_.cuda(), a_next1)
-        q_next2 = self.critic_target2(b_s_.cuda(), a_next1)
-        q_target1 = b_r.cuda() + GAMMA * torch.min(q_next1, q_next2)
-        q_eval1 = self.critic_eval1(b_s.cuda(), b_a.cuda())
-        q_eval2 = self.critic_eval2(b_s.cuda(), b_a.cuda())
+        q_next1 = self.critic_target1(b_s_, a_next1)
+        q_next2 = self.critic_target2(b_s_, a_next1)
+        q_target1 = b_r + GAMMA * torch.min(q_next1, q_next2)
+        q_eval1 = self.critic_eval1(b_s, b_a)
+        q_eval2 = self.critic_eval2(b_s, b_a)
         q_loss1 = self.critic_loss1(q_target1, torch.min(q_eval1, q_eval2))
         self.critic_opt1.zero_grad()
         q_loss1.backward()
@@ -86,11 +86,11 @@ class DDPG(object):
         #a_next2 = self.actor_target(b_s_, a_bound)
         #a_next2 = torch.clip(torch.normal(a_next2, 0.1), a_low_bound.item(), a_bound.item())
         a_next2 = a_next1.detach()
-        q_next1 = self.critic_target1(b_s_.cuda(), a_next2)
-        q_next2 = self.critic_target2(b_s_.cuda(), a_next2)
-        q_target2 = b_r.cuda() + GAMMA * torch.min(q_next1, q_next2)
-        q_eval1 = self.critic_eval1(b_s.cuda(), b_a.cuda())
-        q_eval2 = self.critic_eval2(b_s.cuda(), b_a.cuda())
+        q_next1 = self.critic_target1(b_s_, a_next2)
+        q_next2 = self.critic_target2(b_s_, a_next2)
+        q_target2 = b_r + GAMMA * torch.min(q_next1, q_next2)
+        q_eval1 = self.critic_eval1(b_s, b_a)
+        q_eval2 = self.critic_eval2(b_s, b_a)
         q_loss2 = self.critic_loss2(q_target2, torch.min(q_eval1, q_eval2))
         self.critic_opt2.zero_grad()
         q_loss2.backward()
@@ -100,9 +100,9 @@ class DDPG(object):
         # Actor_Delay
         if self.critic_update % self.policy_delay == 0:
             # 这边还要算一遍action是为了构造出梯度
-            a = self.actor_eval(b_s.cuda(), a_bound.cuda())
-            q_eval1 = self.critic_eval1(b_s.cuda(), a.cuda())
-            q_eval2 = self.critic_eval2(b_s.cuda(), a.cuda())
+            a = self.actor_eval(b_s, a_bound)
+            q_eval1 = self.critic_eval1(b_s, a)
+            q_eval2 = self.critic_eval2(b_s, a)
             a_loss = -torch.mean(torch.min(q_eval1, q_eval2))
             self.actor_opt.zero_grad()
             a_loss.backward()
@@ -126,19 +126,18 @@ a_low_bound = torch.Tensor(env.action_space.low)
 EP_STEPS = 200
 RENDER = False
 
-for i in range(500000):
+for i in range(70):
     s = env.reset()
     ep_r = 0
-    if i%100 == 0:
+    if i == 60:
         torch.save({'actor_eval':ddpg.actor_eval.state_dict(),
                     'actor_target':ddpg.actor_target.state_dict(),
                     'critic_eval1':ddpg.critic_eval1.state_dict(),
                     'critic_eval2':ddpg.critic_eval2.state_dict(),
                     'critic_target1':ddpg.critic_target1.state_dict(),
                     'critic_target2':ddpg.critic_target2.state_dict()}, "model.pk1")
-    for j in range(400):
-        if RENDER:
-            env.render()
+    while True:
+        #env.render()
         a = ddpg.select_action(s, a_bound)
         a = np.clip(np.random.normal(a, var), a_low_bound, a_bound).detach().numpy()[0]
 
@@ -161,13 +160,13 @@ for i in range(500000):
             #var *= 0.9995
             ddpg.learn()
 
-        if done or j==399:
+        if done:
             var *= 0.995
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))
-            if i > 500:
-                RENDER = True
-                #pass
+            if i > 50:
+                #RENDER = True
+                pass
         
         if done:
             break

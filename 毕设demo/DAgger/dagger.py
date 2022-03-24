@@ -16,11 +16,12 @@ from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", lr=0.002):
+    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=0.002):
         self.n_features = n_features
         self.n_actions = n_actions
+        self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/model.pk1")
+        parameters = torch.load("毕设demo/parameters/model2.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions)
         self.learner.load_state_dict(init_model.state_dict())
@@ -99,11 +100,13 @@ class DAgger_Pipeline(object):
     def learner_action(self, state):
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
         actions = self.learner.forward(state)
+        actions = torch.mul(actions, self.a_bound)
         return actions[0].detach()
 
     def expert_action(self, state):
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
         actions = self.expert.forward(state)
+        actions = torch.mul(actions, self.a_bound)
         return actions[0].detach()
 
 def main(select_mode, init_model):
@@ -116,9 +119,9 @@ def main(select_mode, init_model):
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
     var = 0.5
-    n_maxstep = 500
+    n_maxstep = 1000
     n_testtime = 5
-    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode)
+    pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
     start = 0
     for epoch in range(epoch_num):
@@ -171,7 +174,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(3, 1)
+    init_model = Learner(2, 1)
     select_mode = ["Random", "LossPredict", "LossPER"]
     log = {}
     for mode in select_mode:
