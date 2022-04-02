@@ -9,7 +9,7 @@ def draw_pic(log_path, eps):
         line = Line(init_opts=opts.InitOpts(width='850px', height='650px'))
         json_data = json.load(fp)
         x = [i for i in range(1000)]
-        color = ['#33CCCC', '#1A2D3E', '#87CEFA', '#111111', '#00FF7F', '#FFFF00', '#FF4500']
+        color = ['#33CCCC', '#1A2D3E', '#87CEFA', '#111111', '#00FF7F', '#FFFF00', '#FF4500', '#FF3030']
         i = 0
         line.add_xaxis(x)
         for key, data in json_data.items():

@@ -15,7 +15,7 @@ import itertools
 from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
-    def __init__(self, n_features, n_actions, init_model, select_mode="Random", n_clusters=1, lr=0.02):
+    def __init__(self, n_features, n_actions, init_model, lamda=0.15, select_mode="Random", n_clusters=1, lr=0.02):
         self.n_features = n_features
         self.n_actions = n_actions
         self.expert = Expert(n_features, n_actions)
@@ -27,7 +27,7 @@ class DAgger_Pipeline(object):
         self.loss = nn.CrossEntropyLoss()
         self.ExpPool = ExperiencePool(n_features, 10000, n_clusters, select_mode)
         self.select_mode = select_mode
-        self.lamda = 0.15
+        self.lamda = lamda
         self.lr = lr
 
     def train(self, batch_size):
@@ -121,7 +121,7 @@ class DAgger_Pipeline(object):
             max[i, max_act[i]] = 1.
         return max_act
 
-def main(select_mode, init_model):
+def main(select_mode, init_model, lamda):
     reward_log = []
     loss_log = []
     env = gym.make(game_name)
@@ -133,7 +133,7 @@ def main(select_mode, init_model):
     n_clusters = 8
     if select_mode == "LossPredict":
         n_clusters = 1
-    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, select_mode, n_clusters)
+    pipeline = DAgger_Pipeline(n_features, n_actions, init_model, lamda, select_mode, n_clusters)
     RENDER = False
     start = 0
     for epoch in range(epoch_num):
@@ -184,11 +184,16 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(2, 3)
-    select_mode = ["Random", "LossPER", "LossPredict", "MaxEntropy", "Density-Weighted"]
+    select_mode = ["LossPredict"]
     log = {}
+    lamda = [i*0.1 for i in range(1, 11)]
     for mode in select_mode:
-        log[mode] = main(mode, init_model)
-    save_log(log, "log-"+game_name+".json")
+        if mode == "LossPredict":
+            for l in lamda:
+                log[mode+"-"+str(l)] = main(mode, init_model, l)
+        else:
+            log[mode] = main(mode, init_model, 0)
+    save_log(log, "log-Pre-"+game_name+".json")
     
     
 
