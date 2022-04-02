@@ -186,7 +186,7 @@ if __name__ == '__main__':
     init_model = Learner(2, 3)
     select_mode = ["LossPredict"]
     log = {}
-    lamda = [i*0.1 for i in range(1, 11)]
+    lamda = [i*0.05 for i in range(1, 11)]
     for mode in select_mode:
         if mode == "LossPredict":
             for l in lamda:
