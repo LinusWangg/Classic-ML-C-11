@@ -183,17 +183,13 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(2, 3)
-    select_mode = ["LossPredict"]
+    init_model = Learner(8, 4)
+    select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     lamda = [i*0.05 for i in range(1, 11)]
     for mode in select_mode:
-        if mode == "LossPredict":
-            for l in lamda:
-                log[mode+"-"+str(l)] = main(mode, init_model, l)
-        else:
-            log[mode] = main(mode, init_model, 0)
-    save_log(log, "log-Pre-"+game_name+".json")
+        log[mode] = main(mode, init_model, 0.15)
+    save_log(log, "log-"+game_name+".json")
     
     
 

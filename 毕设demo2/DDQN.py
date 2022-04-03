@@ -77,12 +77,12 @@ class DDQN(object):
 
 # Hyper Parameters
 BATCH_SIZE = 32
-LR = 0.01                   # learning rate
+LR = 0.001                   # learning rate
 EPSILON = 0.9               # greedy policy
 GAMMA = 0.9                 # reward discount
 TARGET_REPLACE_ITER = 100   # target update frequency
 MEMORY_CAPACITY = 2000
-game_name = 'MountainCar-v0'
+game_name = 'LunarLander-v2'
 env = gym.make(game_name)
 env = env.unwrapped
 N_ACTIONS = env.action_space.n
@@ -91,12 +91,13 @@ ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_sp
 
 dqn = DDQN(MEMORY_CAPACITY, N_STATES, N_ACTIONS, LR)
 
-for i in range(400):
+for i in range(40000):
     s = env.reset()
     ep_r = 0
+    if i % 30 == 0:
+        dqn.save_model(game_name)
     while True:
-        if i > 250:
-            env.render()
+        #env.render()
         a = dqn.choose_action(s, EPSILON, ENV_A_SHAPE, N_ACTIONS)
 
         s_, r, done, info = env.step(a)
