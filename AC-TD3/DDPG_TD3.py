@@ -3,7 +3,7 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('MountainCarContinuous-v0')
+env = gym.make('LunarLanderContinuous-v2')
 env = env.unwrapped
 #连续
 N_ACTIONS = env.action_space.shape[0]
@@ -13,7 +13,7 @@ N_STATES = env.observation_space.shape[0]
 MEMORY_CAPACITY = 3000
 BATCH_SIZE = 32
 TAU = 0.01
-LR = 1e-4
+LR = 1e-3
 GAMMA = 0.99
 
 class DDPG(object):
@@ -126,10 +126,10 @@ a_low_bound = torch.Tensor(env.action_space.low)
 EP_STEPS = 200
 RENDER = False
 
-for i in range(70):
+for i in range(1000000):
     s = env.reset()
     ep_r = 0
-    if i == 60:
+    if i % 60 == 0:
         torch.save({'actor_eval':ddpg.actor_eval.state_dict(),
                     'actor_target':ddpg.actor_target.state_dict(),
                     'critic_eval1':ddpg.critic_eval1.state_dict(),
@@ -139,7 +139,8 @@ for i in range(70):
     while True:
         #env.render()
         a = ddpg.select_action(s, a_bound)
-        a = np.clip(np.random.normal(a, var), a_low_bound, a_bound).detach().numpy()[0]
+        a = np.random.normal(a, var)
+        a = np.clip(a, a_low_bound, a_bound).detach().numpy()[0]
 
         s_, r, done, info = env.step(a)
 
@@ -157,7 +158,7 @@ for i in range(70):
         ep_r += r
         
         if ddpg.memory_counter > MEMORY_CAPACITY:
-            #var *= 0.9995
+            var *= 0.9995
             ddpg.learn()
 
         if done:

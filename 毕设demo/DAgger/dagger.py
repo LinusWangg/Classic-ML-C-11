@@ -21,7 +21,7 @@ class DAgger_Pipeline(object):
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/model2.pk1")
+        parameters = torch.load("毕设demo/parameters/model3.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions)
         self.learner.load_state_dict(init_model.state_dict())
@@ -174,7 +174,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(2, 1)
+    init_model = Learner(8, 2)
     select_mode = ["Random", "LossPredict", "LossPER"]
     log = {}
     for mode in select_mode:

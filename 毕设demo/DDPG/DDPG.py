@@ -2,7 +2,7 @@ import gym
 from Actor import *
 from Critic import *
 
-game_name = 'Pendulum-v1'
+game_name = 'LunarLanderContinuous-v2'
 env = gym.make(game_name)
 env = env.unwrapped
 N_ACTIONS = env.action_space.shape[0]
