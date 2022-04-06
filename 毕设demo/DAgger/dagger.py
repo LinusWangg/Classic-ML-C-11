@@ -119,7 +119,7 @@ def main(select_mode, init_model):
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
     var = 0.5
-    n_maxstep = 1000
+    n_maxstep = 500
     n_testtime = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
