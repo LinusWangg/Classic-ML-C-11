@@ -3,7 +3,7 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('LunarLanderContinuous-v2')
+env = gym.make('MountainCarContinuous-v0')
 env = env.unwrapped
 #连续
 N_ACTIONS = env.action_space.shape[0]
@@ -17,7 +17,7 @@ LR = 1e-3
 GAMMA = 0.99
 
 class DDPG(object):
-    def __init__(self):
+    def __init__(self, a_bound):
         self.actor_eval = Policy(N_STATES, N_ACTIONS)
         self.actor_target = Policy(N_STATES, N_ACTIONS)
         self.critic_eval1 = Qvalue(N_STATES, N_ACTIONS)
@@ -25,7 +25,7 @@ class DDPG(object):
         self.critic_target1 = Qvalue(N_STATES, N_ACTIONS)
         self.critic_target2 = Qvalue(N_STATES, N_ACTIONS)
         self.memory_counter = 0
-        self.memory = np.zeros((MEMORY_CAPACITY, N_STATES*2 + N_ACTIONS + 1), dtype=np.float32)
+        self.memory = np.zeros((MEMORY_CAPACITY, N_STATES*2 + N_ACTIONS + 2), dtype=np.float32)
         self.actor_target.load_state_dict(self.actor_eval.state_dict())
         self.critic_target1.load_state_dict(self.critic_eval1.state_dict())
         self.critic_target2.load_state_dict(self.critic_eval2.state_dict())
@@ -36,9 +36,12 @@ class DDPG(object):
         self.critic_loss2 = nn.MSELoss()
         self.critic_update = 0
         self.policy_delay = 3
+        self.a_bound = a_bound
+        self.policy_noise = 0.2*a_bound
+        self.noise_clip = 0.5*a_bound
 
-    def store_transition(self, s, a , r, s_, MEMORY_CAPACITY):
-        transition = np.hstack((s, a, r, s_))
+    def store_transition(self, s, a, r, done, s_, MEMORY_CAPACITY):
+        transition = np.hstack((s, a, r, done, s_))
         index = self.memory_counter % MEMORY_CAPACITY
         self.memory[index, :] = transition
         self.memory_counter += 1
@@ -59,7 +62,8 @@ class DDPG(object):
         b_memory = self.memory[sample_index, :]
         b_s = torch.FloatTensor(b_memory[:, :N_STATES])
         b_a = torch.FloatTensor(b_memory[:, N_STATES:N_STATES+N_ACTIONS])
-        b_r = torch.FloatTensor(b_memory[:, N_STATES+N_ACTIONS:N_STATES+2])
+        b_r = torch.FloatTensor(b_memory[:, N_STATES+N_ACTIONS:N_STATES+N_ACTIONS+1])
+        b_done = torch.FloatTensor(b_memory[:, N_STATES+N_ACTIONS+1:N_STATES+N_ACTIONS+2])
         b_s_ = torch.FloatTensor(b_memory[:, -N_STATES:])
         #b_amat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
         #index = b_a.long()
@@ -67,15 +71,20 @@ class DDPG(object):
         #    b_amat[i, index[i]] = 1.
 
         # Target Policy Smoothing Regularization
-        a_next1 = self.actor_target(b_s_, a_bound)
-        a_next1 = torch.clip(torch.normal(a_next1, 0.1), a_low_bound, a_bound)
+        noise = (torch.randn_like(b_a) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
+        a_next1 = self.actor_target(b_s_, self.a_bound)
+        a_next1 = (
+            a_next1 + noise
+        ).clamp(-self.a_bound, self.a_bound)
+
+        #a_next1 = torch.clip(torch.normal(a_next1, 0.2*a_bound), a_low_bound, a_bound)
         #argmax_a = torch.argmax(a_next, axis=1)
         #a_next_mat = torch.FloatTensor(torch.zeros(BATCH_SIZE, N_ACTIONS))
         #for i in range(BATCH_SIZE):
         #    a_next_mat[i, argmax_a[i]] = 1.
         q_next1 = self.critic_target1(b_s_, a_next1)
         q_next2 = self.critic_target2(b_s_, a_next1)
-        q_target1 = b_r + GAMMA * torch.min(q_next1, q_next2)
+        q_target1 = b_r + (1 - b_done) * GAMMA * torch.min(q_next1, q_next2)
         q_eval1 = self.critic_eval1(b_s, b_a)
         q_eval2 = self.critic_eval2(b_s, b_a)
         q_loss1 = self.critic_loss1(q_target1, torch.min(q_eval1, q_eval2))
@@ -88,7 +97,7 @@ class DDPG(object):
         a_next2 = a_next1.detach()
         q_next1 = self.critic_target1(b_s_, a_next2)
         q_next2 = self.critic_target2(b_s_, a_next2)
-        q_target2 = b_r + GAMMA * torch.min(q_next1, q_next2)
+        q_target2 = b_r + (1 - b_done) * GAMMA * torch.min(q_next1, q_next2)
         q_eval1 = self.critic_eval1(b_s, b_a)
         q_eval2 = self.critic_eval2(b_s, b_a)
         q_loss2 = self.critic_loss2(q_target2, torch.min(q_eval1, q_eval2))
@@ -119,10 +128,11 @@ class DDPG(object):
                 eval('self.critic_target2.' + x + '.data.add_(TAU*self.critic_eval2.' + x + '.data)')
 
 
-ddpg = DDPG()
-var = 2.0
+
+var = 1.0
 a_bound = torch.Tensor(env.action_space.high)
 a_low_bound = torch.Tensor(env.action_space.low)
+ddpg = DDPG(a_bound)
 EP_STEPS = 200
 RENDER = False
 
@@ -136,7 +146,7 @@ for i in range(1000000):
                     'critic_eval2':ddpg.critic_eval2.state_dict(),
                     'critic_target1':ddpg.critic_target1.state_dict(),
                     'critic_target2':ddpg.critic_target2.state_dict()}, "model.pk1")
-    while True:
+    for j in range(1000):
         #env.render()
         a = ddpg.select_action(s, a_bound)
         a = np.random.normal(a, var)
@@ -153,22 +163,19 @@ for i in range(1000000):
         #if r <= -100:
         #    done = True
         #    r = -1
-        ddpg.store_transition(s, a, r, s_, MEMORY_CAPACITY)
+        ddpg.store_transition(s, a, r, done, s_, MEMORY_CAPACITY)
 
         ep_r += r
         
         if ddpg.memory_counter > MEMORY_CAPACITY:
-            var *= 0.9995
             ddpg.learn()
 
-        if done:
-            var *= 0.995
+        if done or j==499:
+            var *= 0.999
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))
             if i > 50:
                 #RENDER = True
                 pass
-        
-        if done:
             break
         s = s_
