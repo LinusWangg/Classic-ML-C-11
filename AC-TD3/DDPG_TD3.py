@@ -3,17 +3,17 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('MountainCarContinuous-v0')
+env = gym.make('BipedalWalkerHardcore-v3')
 env = env.unwrapped
 #连续
 N_ACTIONS = env.action_space.shape[0]
 #离散
 #N_ACTIONS = 1
 N_STATES = env.observation_space.shape[0]
-MEMORY_CAPACITY = 3000
-BATCH_SIZE = 32
-TAU = 0.01
-LR = 1e-3
+MEMORY_CAPACITY = 50000
+BATCH_SIZE = 128
+TAU = 0.005
+LR = 1e-4
 GAMMA = 0.99
 
 class DDPG(object):
@@ -29,6 +29,13 @@ class DDPG(object):
         self.actor_target.load_state_dict(self.actor_eval.state_dict())
         self.critic_target1.load_state_dict(self.critic_eval1.state_dict())
         self.critic_target2.load_state_dict(self.critic_eval2.state_dict())
+        param = torch.load("model.pk1")
+        self.actor_eval.load_state_dict(param['actor_eval'])
+        self.actor_target.load_state_dict(param['actor_target'])
+        self.critic_eval1.load_state_dict(param['critic_eval1'])
+        self.critic_eval2.load_state_dict(param['critic_eval2'])
+        self.critic_target1.load_state_dict(param['critic_target1'])
+        self.critic_target2.load_state_dict(param['critic_target2'])
         self.actor_opt = torch.optim.Adam(self.actor_eval.parameters(), LR)
         self.critic_opt1 = torch.optim.Adam(self.critic_eval1.parameters(), LR)
         self.critic_opt2 = torch.optim.Adam(self.critic_eval2.parameters(), LR)
@@ -129,7 +136,7 @@ class DDPG(object):
 
 
 
-var = 1.0
+var = 1.25
 a_bound = torch.Tensor(env.action_space.high)
 a_low_bound = torch.Tensor(env.action_space.low)
 ddpg = DDPG(a_bound)
@@ -146,7 +153,9 @@ for i in range(1000000):
                     'critic_eval2':ddpg.critic_eval2.state_dict(),
                     'critic_target1':ddpg.critic_target1.state_dict(),
                     'critic_target2':ddpg.critic_target2.state_dict()}, "model.pk1")
-    for j in range(1000):
+    if ddpg.memory_counter > MEMORY_CAPACITY:
+        print("Updating", end=" ")
+    while True:
         #env.render()
         a = ddpg.select_action(s, a_bound)
         a = np.random.normal(a, var)
@@ -160,9 +169,9 @@ for i in range(1000000):
         #r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
         #r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
         #r = r1 + r2
-        #if r <= -100:
+        if r <= -100:
         #    done = True
-        #    r = -1
+            r = -1
         ddpg.store_transition(s, a, r, done, s_, MEMORY_CAPACITY)
 
         ep_r += r
@@ -170,7 +179,7 @@ for i in range(1000000):
         if ddpg.memory_counter > MEMORY_CAPACITY:
             ddpg.learn()
 
-        if done or j==499:
+        if done:
             var *= 0.999
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))

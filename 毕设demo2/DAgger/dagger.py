@@ -15,10 +15,10 @@ class DAgger_Pipeline(object):
     def __init__(self, n_features, n_actions, init_model, lamda=0.15, select_mode="Random", n_clusters=1, lr=0.02):
         self.n_features = n_features
         self.n_actions = n_actions
-        self.expert = Expert(n_features, n_actions).cuda()
+        self.expert = Expert(n_features, n_actions)
         parameters = torch.load("毕设demo2/parameters/"+game_name+"_parameters.pth.tar")
         self.expert.load_state_dict(parameters[game_name+'_Eval'])
-        self.learner = Learner(n_features, n_actions).cuda()
+        self.learner = Learner(n_features, n_actions)
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.CrossEntropyLoss()
@@ -187,7 +187,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(4, 2)
+    init_model = Learner(8, 4)
     select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     lamda = [i*0.05 for i in range(1, 11)]
