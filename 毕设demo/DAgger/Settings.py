@@ -5,10 +5,12 @@ ParaExchange = 100
 # Critic GAMMA
 GAMMA = 0.9
 # GAME NAME
-game_name = "LunarLanderContinuous-v2"
+game_name = "Pendulum-v1"
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
-epoch_num = 1000
+epoch_num = 100
 # batchsize
 batch_num = 32
+# select_size
+select_size = 64

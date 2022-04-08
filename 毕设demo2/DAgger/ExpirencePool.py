@@ -1,5 +1,3 @@
-from sys import maxsize
-from turtle import update
 from sklearn.cluster import KMeans
 import torch
 import numpy as np
@@ -22,6 +20,7 @@ class ExperiencePool:
         self.memory_iter = 0
         self.is_build = False
         self.is_lossNet = False
+        self.daggerMem = np.array([[]])
 
     # 计算中心点之间的距离，大于最大距离则要新建一类
     def maxMinDisBetMeans(self):
@@ -208,7 +207,7 @@ class ExperiencePool:
         return mean_loss
     
     # 挑选样本
-    def sample(self, batch_size, model, beta=0.9):
+    def sample2Dagger(self, batch_size, model, beta=0.9):
         if self.select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
@@ -230,5 +229,13 @@ class ExperiencePool:
         elif self.select_mode == "LossPER":
             return self.LossPER(batch_size)
 
+    def toDaggerMem(self, batch_data):
+        if self.daggerMem.shape[0] < 32:
+            self.daggerMem = batch_data
+        else:
+            self.daggerMem = np.concatenate((self.daggerMem, batch_data))
 
+    def sample(self, batch_size):
+        sample_index = np.random.choice(self.daggerMem.shape[0], batch_size)
+        return self.daggerMem[sample_index, :]
  

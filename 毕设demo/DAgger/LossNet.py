@@ -12,18 +12,19 @@ class LossNet(nn.Module):
         self.layer2.weight.data.normal_(0, 0.1) # initialization of FC1
 
     def forward(self, x):
+        x = x.cuda()
         x = self.layer1(x)
         x = F.relu(x)
         x = self.layer2(x)
         x = torch.tanh(x)
-        return x * 16
+        return x.cpu() * 16
 
 class LossPred(object):
 
     def __init__(self, n_features, lr=0.002):
         super(LossPred, self).__init__()
         self.n_features = n_features
-        self.lossNet = LossNet(self.n_features)
+        self.lossNet = LossNet(self.n_features).cuda()
         self.lossfunc = nn.MSELoss()
         self.optim = torch.optim.Adam(self.lossNet.parameters(), lr)
 

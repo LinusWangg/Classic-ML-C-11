@@ -13,8 +13,9 @@ class Expert(nn.Module):
         self.out.weight.data.normal_(0, 0.1) # initilizaiton of OUT
 
     def forward(self, x):
+        x = x.cuda()
         x = self.fc1(x)
         x = F.relu(x)
         actions_value = self.out(x)
-        return actions_value
+        return actions_value.cpu()
 

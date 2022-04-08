@@ -13,8 +13,9 @@ class Learner(nn.Module):
         self.layer4 = nn.Sequential(nn.Linear(64, n_actions), nn.Tanh())
 
     def forward(self, x):
+        x = x.cuda()
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        return x
+        return x.cpu()

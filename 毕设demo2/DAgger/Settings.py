@@ -5,13 +5,14 @@ ParaExchange = 100
 # Critic GAMMA
 GAMMA = 0.9
 # GAME NAME
-game_name = 'LunarLander-v2'
+game_name = 'CartPole-v0'
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
 epoch_num = 1000
 # batchsize
-batch_num = 64
+batch_num = 32
 # eps-action
 EPSILON = 0.9  
-# 
+# select-size
+select_size = 64

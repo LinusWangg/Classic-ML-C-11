@@ -1,7 +1,4 @@
-from gzip import READ
-from select import select
 import gym
-from transformers import pipeline
 from Settings import *
 from expert import Expert
 from learner import Learner
@@ -18,19 +15,19 @@ class DAgger_Pipeline(object):
     def __init__(self, n_features, n_actions, init_model, lamda=0.15, select_mode="Random", n_clusters=1, lr=0.02):
         self.n_features = n_features
         self.n_actions = n_actions
-        self.expert = Expert(n_features, n_actions)
+        self.expert = Expert(n_features, n_actions).cuda()
         parameters = torch.load("毕设demo2/parameters/"+game_name+"_parameters.pth.tar")
         self.expert.load_state_dict(parameters[game_name+'_Eval'])
-        self.learner = Learner(n_features, n_actions)
+        self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.CrossEntropyLoss()
-        self.ExpPool = ExperiencePool(n_features, 10000, n_clusters, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 1000, n_clusters, select_mode)
         self.select_mode = select_mode
         self.lamda = lamda
         self.lr = lr
 
-    def train(self, batch_size):
+    def train(self, select_size, batch_size):
         #states = torch.from_numpy(np.array(states))
         #actions = torch.from_numpy(np.array(actions))
         #dataDagger = TensorDataset(states, actions)
@@ -41,13 +38,20 @@ class DAgger_Pipeline(object):
         idxs = []
         weight = []
         if self.select_mode != "LossPER":
-            batch_data = self.ExpPool.sample(batch_size, self.learner)
+            batch_data = self.ExpPool.sample2Dagger(select_size, self.learner)
         elif self.select_mode == "LossPER":
-            batch_data, idxs, weight = self.ExpPool.sample(batch_size, self.learner)
+            batch_data, idxs, weight = self.ExpPool.sample2Dagger(select_size, self.learner)
         states = torch.from_numpy(batch_data).to(torch.float32)
+        batch_expert = np.transpose(self.expert_action(states).numpy().reshape(1, select_size))
+        batch_data = np.hstack((states, batch_expert))
+        self.ExpPool.toDaggerMem(batch_data)
         for i in range(5):
+            batch_data = self.ExpPool.sample(batch_size)
+            #states = torch.from_numpy(batch_data).to(torch.float32)
             #for s, a in zip(states, actions):
-            expert_a = self.expert_action(states)
+            #expert_a = self.expert_action(states)
+            expert_a = torch.from_numpy(np.transpose(batch_data[:, -1:])).squeeze(0).to(torch.long)
+            states = torch.from_numpy(batch_data[:, :self.n_features]).to(torch.float32)
             actions = self.learner.forward(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
             if self.select_mode == "LossPredict":
@@ -78,13 +82,13 @@ class DAgger_Pipeline(object):
                 self.optim.step()
 
                 yhat_loss = []
-                for s in states:
-                    ex_a = self.expert_action(s.reshape(1, 1, s.shape[0])).detach()
-                    lr_a = torch.unsqueeze(self.learner(s.float()).to(torch.float64), 0)
+                for i in range(states.shape[0]):
+                    ex_a = expert_a[i].unsqueeze(0)
+                    lr_a = actions[i, :].unsqueeze(0)
                     loss = nn.CrossEntropyLoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                selectNet_loss += self.ExpPool.LossPredTrain(states, torch.FloatTensor(yhat_loss))
                 
                 self.ExpPool.update_SumTree(batch_num, idxs, states)
                 
@@ -129,7 +133,7 @@ def main(select_mode, init_model, lamda):
     n_actions = env.action_space.n
     n_features = env.observation_space.shape[0]
     n_maxstep = 1000
-    n_testtime = 5
+    n_testtime = 10
     n_clusters = 8
     if select_mode == "LossPredict":
         n_clusters = 1
@@ -163,7 +167,7 @@ def main(select_mode, init_model, lamda):
 
         if pipeline.ExpPool.is_build:
             print("Updating", end=" ")
-            actNet_loss, selectNet_loss = pipeline.train(batch_num)
+            actNet_loss, selectNet_loss = pipeline.train(select_size, batch_num)
             if start == 0:
                 start = epoch
             WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
@@ -183,7 +187,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(8, 4)
+    init_model = Learner(4, 2)
     select_mode = ["LossPER", "LossPredict", "Random", "MaxEntropy", "Density-Weighted"]
     log = {}
     lamda = [i*0.05 for i in range(1, 11)]

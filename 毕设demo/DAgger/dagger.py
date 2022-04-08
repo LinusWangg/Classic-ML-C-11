@@ -20,10 +20,10 @@ class DAgger_Pipeline(object):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
-        self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/model3.pk1")
+        self.expert = Expert(n_features, n_actions).cuda()
+        parameters = torch.load("毕设demo/parameters/model.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
-        self.learner = Learner(n_features, n_actions)
+        self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.MSELoss()
@@ -32,7 +32,7 @@ class DAgger_Pipeline(object):
         self.lr = lr
         self.ExpPool = ExperiencePool(n_features, 10000, 7, select_mode)
 
-    def train(self, batch_size):
+    def train(self, select_size, batch_size):
         #states = torch.from_numpy(np.array(states))
         #actions = torch.from_numpy(np.array(actions))
         #dataDagger = TensorDataset(states, actions)
@@ -43,11 +43,13 @@ class DAgger_Pipeline(object):
         idxs = []
         weight = []
         if self.select_mode != "LossPER":
-            batch_data = self.ExpPool.sample(batch_size, self.learner)
+            batch_data = self.ExpPool.sample2Dagger(select_size, self.learner)
         elif self.select_mode == "LossPER":
-            batch_data, idxs, weight = self.ExpPool.sample(batch_size, self.learner)
-        states = torch.from_numpy(batch_data).to(torch.float32)
+            batch_data, idxs, weight = self.ExpPool.sample2Dagger(select_size, self.learner)
+        self.ExpPool.toDaggerMen(batch_data)
         for i in range(5):
+            batch_data = self.ExpPool.sample(batch_size)
+            states = torch.from_numpy(batch_data).to(torch.float32)
             #for s, a in zip(states, actions):
             expert_a = self.expert_action(states).to(torch.float64)
             actions = self.learner.forward(states.float()).to(torch.float64)
@@ -120,7 +122,7 @@ def main(select_mode, init_model):
     a_bound = env.action_space.high
     var = 0.5
     n_maxstep = 500
-    n_testtime = 5
+    n_testtime = 10
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
     start = 0
@@ -153,7 +155,7 @@ def main(select_mode, init_model):
         
         if pipeline.ExpPool.is_build:
             print("Updating", end=" ")
-            actNet_loss, selectNet_loss = pipeline.train(batch_num)
+            actNet_loss, selectNet_loss = pipeline.train(select_size, batch_num)
             var *= 0.9995
             if start == 0:
                 start = epoch
@@ -174,7 +176,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(8, 2)
+    init_model = Learner(3, 1)
     select_mode = ["Random", "LossPredict", "LossPER"]
     log = {}
     for mode in select_mode:
