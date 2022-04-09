@@ -12,10 +12,6 @@ class LossNet(nn.Module):
         self.layer2.weight.data.normal_(0, 0.1) # initialization of FC1
 
     def forward(self, x):
-<<<<<<< HEAD
-=======
-        x = x.cuda()
->>>>>>> 2149808199f7913f93c29d38dd98773d7fc6018f
         x = self.layer1(x)
         x = F.relu(x)
         x = self.layer2(x)
