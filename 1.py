@@ -2,5 +2,5 @@ from sklearn.cluster import KMeans
 import numpy as np
 import torch
 
-a = np.zeros((10,5))
-print(a[:, -2:])
+from gym import envs
+print(envs.registry.all())

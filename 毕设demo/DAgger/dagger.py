@@ -30,7 +30,7 @@ class DAgger_Pipeline(object):
         self.select_mode = select_mode
         self.lamda = 0.05
         self.lr = lr
-        self.ExpPool = ExperiencePool(n_features, 10000, 7, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 5000, 7, select_mode)
 
     def train(self, select_size, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -46,25 +46,29 @@ class DAgger_Pipeline(object):
             batch_data = self.ExpPool.sample2Dagger(select_size, self.learner)
         elif self.select_mode == "LossPER":
             batch_data, idxs, weight = self.ExpPool.sample2Dagger(select_size, self.learner)
-        self.ExpPool.toDaggerMen(batch_data)
+        states = torch.from_numpy(batch_data).to(torch.float32)
+        batch_expert = np.transpose(self.expert_action(states).numpy().reshape(1, select_size))
+        batch_data = np.hstack((states, batch_expert))
+        self.ExpPool.toDaggerMem(batch_data)
         for i in range(5):
             batch_data = self.ExpPool.sample(batch_size)
-            states = torch.from_numpy(batch_data).to(torch.float32)
             #for s, a in zip(states, actions):
-            expert_a = self.expert_action(states).to(torch.float64)
+            expert_a = torch.from_numpy(np.transpose(batch_data[:, -self.n_actions:])).to(torch.float64).squeeze(0)
+            states = torch.from_numpy(batch_data[:, :self.n_features]).to(torch.float32)
             actions = self.learner.forward(states.float()).to(torch.float64)
+            actions_detach = actions.detach()
             #expert_a = expert_a.to(torch.float64)
             if self.select_mode == "LossPredict":
                 total_loss = 0
-                loss1 = self.loss(actions, expert_a)
+                loss1 = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
                 actNet_loss += loss1.item()
                 l_hat = self.ExpPool.LossPred.pred(states)
                 loss2 = []
                 for i in range(0, len(expert_a), 2):
                     j = i+1
                     loss = nn.MSELoss()
-                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a[i], 0))
-                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a[j], 0))
+                    loss_i = loss(actions[i], torch.unsqueeze(expert_a[i], 0))
+                    loss_j = loss(actions[j], torch.unsqueeze(expert_a[j], 0))
                     loss2.append(max(0, -torch.sign(loss_i-loss_j))*(l_hat[i]-l_hat[j]+1e-6))
                 loss2 = torch.mean(torch.FloatTensor(loss2))
                 selectNet_loss += loss2.item()
@@ -74,25 +78,25 @@ class DAgger_Pipeline(object):
                 total_loss.backward()
                 optim.step()
             elif self.select_mode == "LossPER":
-                loss = self.loss(actions, expert_a)
+                loss = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
                 actNet_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
                 
                 yhat_loss = []
-                for s in states:
-                    ex_a = self.expert_action(s).detach().to(torch.float64)
-                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                for i in range(states.shape[0]):
+                    ex_a = expert_a[i].unsqueeze(0)
+                    lr_a = actions_detach[i, :].unsqueeze(0)
                     loss = nn.MSELoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+                selectNet_loss += self.ExpPool.LossPredTrain(states, torch.FloatTensor(yhat_loss))
                 
                 self.ExpPool.update_SumTree(batch_num, idxs, states)
                 
             else:
-                loss = self.loss(actions, expert_a)
+                loss = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
                 actNet_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
@@ -121,8 +125,8 @@ def main(select_mode, init_model):
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
     var = 0.5
-    n_maxstep = 500
-    n_testtime = 10
+    n_maxstep = 1000
+    n_testtime = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
     start = 0
@@ -177,7 +181,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(3, 1)
-    select_mode = ["Random", "LossPredict", "LossPER"]
+    select_mode = ["Random", "LossPER", "LossPredict"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)

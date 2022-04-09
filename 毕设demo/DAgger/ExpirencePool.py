@@ -237,7 +237,7 @@ class ExperiencePool:
         elif self.select_mode == "LossPER":
             return self.LossPER(batch_size)
 
-    def toDaggerMen(self, batch_data):
+    def toDaggerMem(self, batch_data):
         if self.daggerMem.shape[0] < 32:
             self.daggerMem = batch_data
         else:
