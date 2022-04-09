@@ -20,10 +20,10 @@ class DAgger_Pipeline(object):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
-        self.expert = Expert(n_features, n_actions).cuda()
+        self.expert = Expert(n_features, n_actions)
         parameters = torch.load("毕设demo/parameters/model.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
-        self.learner = Learner(n_features, n_actions).cuda()
+        self.learner = Learner(n_features, n_actions)
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.MSELoss()
