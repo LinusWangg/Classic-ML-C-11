@@ -12,9 +12,9 @@ class Learner(nn.Module):
         self.layer2.weight.data.normal_(0, 0.1) # initialization of FC1
 
     def forward(self, x):
-        x = x.cuda()
+        x = x
         x = self.layer1(x)
         x = F.relu(x)
         x = self.layer2(x)
         x = F.softmax(x)
-        return x.cpu()
+        return x
