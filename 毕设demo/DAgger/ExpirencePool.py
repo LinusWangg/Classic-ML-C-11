@@ -20,7 +20,7 @@ class ExperiencePool:
         elif select_mode == "LossPER":
             self.memory = Memory(n_maxexps)
         self.memory_iter = 0
-        self.daggerMem = np.array([[]])
+        #self.daggerMem = np.array([[]])
         self.is_build = False
         self.is_lossNet = False
 
@@ -215,7 +215,7 @@ class ExperiencePool:
         return mean_loss
     
     # 挑选样本
-    def sample2Dagger(self, batch_size, model, beta=0.9):
+    def sample(self, batch_size, model, beta=0.9):
         if self.select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
@@ -244,8 +244,8 @@ class ExperiencePool:
             self.daggerMem = np.concatenate((self.daggerMem, batch_data))
         
 
-    def sample(self, batch_size):
-        sample_index = np.random.choice(self.daggerMem.shape[0], batch_size)
-        return self.daggerMem[sample_index, :]
+    #def sample(self, batch_size):
+    #    sample_index = np.random.choice(self.daggerMem.shape[0], batch_size)
+    #    return self.daggerMem[sample_index, :]
         
  

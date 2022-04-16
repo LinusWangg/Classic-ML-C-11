@@ -102,8 +102,8 @@ class DDQN(object):
         'target':self.target_net.state_dict()}, 'Breakout-v4_parameters.pth.tar')
 
 # Hyper Parameters
-BATCH_SIZE = 32
-LR = 1e-5                   # learning rate
+BATCH_SIZE = 256
+LR = 1e-3                   # learning rate
 EPSILON = 0.9               # greedy policy
 GAMMA = 0.9                 # reward discount
 TARGET_REPLACE_ITER = 100   # target update frequency
@@ -116,7 +116,7 @@ ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_sp
 
 dqn = DDQN(MEMORY_CAPACITY, 4, N_ACTIONS, LR)
 
-for i in range(40000):
+for i in range(400000):
     if i%60 == 0:
         dqn.save_model()
     s = env.reset()

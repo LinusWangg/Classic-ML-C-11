@@ -3,33 +3,33 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('BipedalWalkerHardcore-v3')
+env = gym.make('Ant-v2')
 env = env.unwrapped
 #连续
 N_ACTIONS = env.action_space.shape[0]
 #离散
 #N_ACTIONS = 1
 N_STATES = env.observation_space.shape[0]
-MEMORY_CAPACITY = 50000
-BATCH_SIZE = 128
+MEMORY_CAPACITY = 2000
+BATCH_SIZE = 32
 TAU = 0.005
 LR = 1e-4
 GAMMA = 0.99
 
 class DDPG(object):
     def __init__(self, a_bound):
-        self.actor_eval = Policy(N_STATES, N_ACTIONS)
-        self.actor_target = Policy(N_STATES, N_ACTIONS)
-        self.critic_eval1 = Qvalue(N_STATES, N_ACTIONS)
-        self.critic_eval2 = Qvalue(N_STATES, N_ACTIONS)
-        self.critic_target1 = Qvalue(N_STATES, N_ACTIONS)
-        self.critic_target2 = Qvalue(N_STATES, N_ACTIONS)
+        self.actor_eval = Policy(N_STATES, N_ACTIONS).cuda()
+        self.actor_target = Policy(N_STATES, N_ACTIONS).cuda()
+        self.critic_eval1 = Qvalue(N_STATES, N_ACTIONS).cuda()
+        self.critic_eval2 = Qvalue(N_STATES, N_ACTIONS).cuda()
+        self.critic_target1 = Qvalue(N_STATES, N_ACTIONS).cuda()
+        self.critic_target2 = Qvalue(N_STATES, N_ACTIONS).cuda()
         self.memory_counter = 0
         self.memory = np.zeros((MEMORY_CAPACITY, N_STATES*2 + N_ACTIONS + 2), dtype=np.float32)
         self.actor_target.load_state_dict(self.actor_eval.state_dict())
         self.critic_target1.load_state_dict(self.critic_eval1.state_dict())
         self.critic_target2.load_state_dict(self.critic_eval2.state_dict())
-        param = torch.load("model.pk1")
+        param = torch.load("Ant-v2_parameters.pth.tar")
         self.actor_eval.load_state_dict(param['actor_eval'])
         self.actor_target.load_state_dict(param['actor_target'])
         self.critic_eval1.load_state_dict(param['critic_eval1'])
@@ -136,7 +136,7 @@ class DDPG(object):
 
 
 
-var = 1.25
+var = 0.15
 a_bound = torch.Tensor(env.action_space.high)
 a_low_bound = torch.Tensor(env.action_space.low)
 ddpg = DDPG(a_bound)
@@ -152,10 +152,10 @@ for i in range(1000000):
                     'critic_eval1':ddpg.critic_eval1.state_dict(),
                     'critic_eval2':ddpg.critic_eval2.state_dict(),
                     'critic_target1':ddpg.critic_target1.state_dict(),
-                    'critic_target2':ddpg.critic_target2.state_dict()}, "model.pk1")
+                    'critic_target2':ddpg.critic_target2.state_dict()}, "Ant-v2_parameters.pth.tar")
     if ddpg.memory_counter > MEMORY_CAPACITY:
         print("Updating", end=" ")
-    while True:
+    for j in range(1000):
         #env.render()
         a = ddpg.select_action(s, a_bound)
         a = np.random.normal(a, var)
@@ -169,9 +169,9 @@ for i in range(1000000):
         #r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
         #r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
         #r = r1 + r2
-        if r <= -100:
+        #if r <= -100:
         #    done = True
-            r = -1
+        #    r = -1
         ddpg.store_transition(s, a, r, done, s_, MEMORY_CAPACITY)
 
         ep_r += r
@@ -179,7 +179,7 @@ for i in range(1000000):
         if ddpg.memory_counter > MEMORY_CAPACITY:
             ddpg.learn()
 
-        if done:
+        if done or j==999:
             var *= 0.999
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))

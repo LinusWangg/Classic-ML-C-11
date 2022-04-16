@@ -12,6 +12,7 @@ class LossNet(nn.Module):
         self.layer2.weight.data.normal_(0, 0.1) # initialization of FC1
 
     def forward(self, x):
+        x = x.cuda()
         x = self.layer1(x)
         x = F.relu(x)
         x = self.layer2(x)
@@ -31,6 +32,7 @@ class LossPred(object):
         return self.lossNet.forward(data)
     
     def train(self, data, yhat_loss):
+        data = torch.FloatTensor(data)
         mean_loss = 0
         for i in range(10):
             pred_res = self.pred(data.to(torch.float32))

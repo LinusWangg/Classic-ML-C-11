@@ -1,8 +1,4 @@
-from asyncio.windows_utils import pipe
-from gzip import READ
-from select import select
 import gym
-from transformers import pipeline
 from Settings import *
 from expert import Expert
 from learner import Learner
@@ -11,6 +7,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
+import os
 
 from ExpirencePool import ExperiencePool
 
@@ -20,10 +17,10 @@ class DAgger_Pipeline(object):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
-        self.expert = Expert(n_features, n_actions)
-        parameters = torch.load("毕设demo/parameters/model.pk1")
+        self.expert = Expert(n_features, n_actions).cuda()
+        parameters = torch.load("毕设demo/parameters/Ant-v2_parameters.pth.tar")
         self.expert.load_state_dict(parameters['actor_eval'])
-        self.learner = Learner(n_features, n_actions)
+        self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.MSELoss()
@@ -32,7 +29,7 @@ class DAgger_Pipeline(object):
         self.lr = lr
         self.ExpPool = ExperiencePool(n_features, 5000, 7, select_mode)
 
-    def train(self, select_size, batch_size):
+    def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
         #actions = torch.from_numpy(np.array(actions))
         #dataDagger = TensorDataset(states, actions)
@@ -43,32 +40,26 @@ class DAgger_Pipeline(object):
         idxs = []
         weight = []
         if self.select_mode != "LossPER":
-            batch_data = self.ExpPool.sample2Dagger(select_size, self.learner)
+            batch_data = self.ExpPool.sample(batch_size, self.learner)
         elif self.select_mode == "LossPER":
-            batch_data, idxs, weight = self.ExpPool.sample2Dagger(select_size, self.learner)
+            batch_data, idxs, weight = self.ExpPool.sample(batch_size, self.learner)
         states = torch.from_numpy(batch_data).to(torch.float32)
-        batch_expert = np.transpose(self.expert_action(states).numpy().reshape(1, select_size))
-        batch_data = np.hstack((states, batch_expert))
-        self.ExpPool.toDaggerMem(batch_data)
         for i in range(5):
-            batch_data = self.ExpPool.sample(batch_size)
             #for s, a in zip(states, actions):
-            expert_a = torch.from_numpy(np.transpose(batch_data[:, -self.n_actions:])).to(torch.float64).squeeze(0)
-            states = torch.from_numpy(batch_data[:, :self.n_features]).to(torch.float32)
+            expert_a = self.expert_action(states).to(torch.float64)
             actions = self.learner.forward(states.float()).to(torch.float64)
-            actions_detach = actions.detach()
             #expert_a = expert_a.to(torch.float64)
             if self.select_mode == "LossPredict":
                 total_loss = 0
-                loss1 = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
+                loss1 = self.loss(actions, expert_a)
                 actNet_loss += loss1.item()
                 l_hat = self.ExpPool.LossPred.pred(states)
                 loss2 = []
                 for i in range(0, len(expert_a), 2):
                     j = i+1
                     loss = nn.MSELoss()
-                    loss_i = loss(actions[i], torch.unsqueeze(expert_a[i], 0))
-                    loss_j = loss(actions[j], torch.unsqueeze(expert_a[j], 0))
+                    loss_i = loss(torch.unsqueeze(actions[i], 0), torch.unsqueeze(expert_a[i], 0))
+                    loss_j = loss(torch.unsqueeze(actions[j], 0), torch.unsqueeze(expert_a[j], 0))
                     loss2.append(max(0, -torch.sign(loss_i-loss_j))*(l_hat[i]-l_hat[j]+1e-6))
                 loss2 = torch.mean(torch.FloatTensor(loss2))
                 selectNet_loss += loss2.item()
@@ -78,25 +69,25 @@ class DAgger_Pipeline(object):
                 total_loss.backward()
                 optim.step()
             elif self.select_mode == "LossPER":
-                loss = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
+                loss = self.loss(actions, expert_a)
                 actNet_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
                 
                 yhat_loss = []
-                for i in range(states.shape[0]):
-                    ex_a = expert_a[i].unsqueeze(0)
-                    lr_a = actions_detach[i, :].unsqueeze(0)
+                for s in states:
+                    ex_a = self.expert_action(s).detach().to(torch.float64)
+                    lr_a = self.learner(s.float()).detach().to(torch.float64)
                     loss = nn.MSELoss()
                     y_hat = loss(lr_a, ex_a).item()
                     yhat_loss.append([y_hat])
-                selectNet_loss += self.ExpPool.LossPredTrain(states, torch.FloatTensor(yhat_loss))
+                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
                 
                 self.ExpPool.update_SumTree(batch_num, idxs, states)
                 
             else:
-                loss = self.loss(actions, expert_a.reshape(expert_a.shape[0], 1))
+                loss = self.loss(actions, expert_a)
                 actNet_loss += loss.item()
                 self.optim.zero_grad()
                 loss.backward()
@@ -126,7 +117,7 @@ def main(select_mode, init_model):
     a_bound = env.action_space.high
     var = 0.5
     n_maxstep = 1000
-    n_testtime = 5
+    n_testtime = 1
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
     start = 0
@@ -153,13 +144,15 @@ def main(select_mode, init_model):
                 
                 s = s_
         mean_r /= n_testtime
+        path = '/models/'+game_name+'/'+select_mode
+        torch.save(pipeline.learner.state_dict(), 'models/'+game_name+'/'+select_mode+'/'+'Dagger'+str(epoch)+'.pth')
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
         actNet_loss = 0
         selectNet_loss = 0
         
         if pipeline.ExpPool.is_build:
             print("Updating", end=" ")
-            actNet_loss, selectNet_loss = pipeline.train(select_size, batch_num)
+            actNet_loss, selectNet_loss = pipeline.train(batch_num)
             var *= 0.9995
             if start == 0:
                 start = epoch
@@ -180,12 +173,12 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(3, 1)
-    select_mode = ["Random", "LossPER", "LossPredict"]
+    init_model = Learner(111, 8)
+    select_mode = ["Random"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
-    save_log(log, "log-"+game_name+".json")
+    save_log(log, "log2-"+game_name+".json")
     
     
 
