@@ -8,8 +8,8 @@ def draw_pic(log_path, eps):
     with open(log_path, 'r', encoding='utf-8') as fp:
         line = Line(init_opts=opts.InitOpts(width='850px', height='650px'))
         json_data = json.load(fp)
-        x = [i for i in range(3000)]
-        color = ['#33CCCC', '#1A2D3E', '#87CEFA', '#111111']
+        x = [i for i in range(500)]
+        color = ['#33CCCC', '#1A2D3E', '#87CEFA', '#111111', '#00FF7F', '#FFFF00', '#FF4500', '#FF3030', '#00FF00', '#800000']
         i = 0
         line.add_xaxis(x)
         for key, data in json_data.items():
@@ -32,4 +32,4 @@ def draw_pic(log_path, eps):
 
 
 if __name__ == '__main__':
-    draw_pic("log-"+game_name+".json", 0.95)
+    draw_pic("log-"+game_name+".json", 0.9)

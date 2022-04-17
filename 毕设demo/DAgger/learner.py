@@ -7,15 +7,13 @@ class Learner(nn.Module):
     ## 学习者
     def __init__(self, n_features, n_actions):
         super(Learner, self).__init__()
-        self.layer1 = nn.Sequential(nn.Linear(n_features, 128), nn.ReLU(True))
-        self.layer2 = nn.Sequential(nn.Linear(128, 256), nn.ReLU(True))
-        self.layer3 = nn.Sequential(nn.Linear(256, 64), nn.ReLU(True))
-        self.layer4 = nn.Sequential(nn.Linear(64, n_actions), nn.Tanh())
+        self.fc1 = nn.Linear(n_features, 100)
+        self.fc1.weight.data.normal_(0, 0.1)
+        self.out = nn.Linear(100, n_actions)
+        self.out.weight.data.normal_(0, 0.1)
 
     def forward(self, x):
         x = x.cuda()
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x = self.fc1(x)
+        x = self.out(x)
         return x.cpu()

@@ -19,11 +19,12 @@ class ExperiencePool:
             self.memory = np.zeros((self.n_maxexps, n_features))
         elif select_mode == "LossPER":
             self.memory = Memory(n_maxexps)
-        if select_mode == "DisSample":
+        if select_mode == "DisSample" or select_mode == "MaxDisSample":
             self.dis = np.zeros((self.n_maxexps)) #idx-angle
         self.memory_iter = 0
         self.e_base = 0
-        #self.daggerMem = np.array([[]])
+        self.daggerMem = np.array([[]])
+        self.daggerMemNum = 0
         self.is_build = False
         self.is_lossNet = False
 
@@ -95,22 +96,34 @@ class ExperiencePool:
                 for i in range(self.n_maxexps):
                     self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
             self.memory_iter %= self.n_maxexps
+
+        elif self.select_mode == "MaxDisSample":
+            self.memory[self.memory_iter] = data
+            if self.is_build:
+                self.dis[self.memory_iter] = self.calculate(data, self.e_base)
+            self.memory_iter += 1
+            if self.memory_iter == self.n_maxexps:
+                self.is_build = True
+                self.e_base = np.mean(self.memory, axis=0)
+                for i in range(self.n_maxexps):
+                    self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
+            self.memory_iter %= self.n_maxexps
         
         elif self.select_mode != "LossPER":
             copy = self.memory[self.memory_iter]
             self.memory[self.memory_iter] = data
             self.memory_iter += 1
             if self.memory_iter == self.n_maxexps:
-                self.kmeans = KMeans( 
-                    n_clusters = self.n_clusters,
-                    n_init = 10,
-                    max_iter = 300,
-                    init = 'k-means++',
-                    ).fit(self.memory)
-                print("------------------K-Means建立------------------")
-                self.cluster_mean = self.kmeans.cluster_centers_
+                #self.kmeans = KMeans( 
+                #    n_clusters = self.n_clusters,
+                #    n_init = 10,
+                #    max_iter = 300,
+                #    init = 'k-means++',
+                #    ).fit(self.memory)
+                #print("------------------K-Means建立------------------")
+                #self.cluster_mean = self.kmeans.cluster_centers_
                 self.is_build = True
-                self.maxMinDisBetMeans()
+                #self.maxMinDisBetMeans()
             #elif self.is_build:
             #    self.updateMeans(data, 1)
             #    self.updateMeans(copy, -1)
@@ -209,22 +222,18 @@ class ExperiencePool:
         return np.array(batch_data)
 
     def LossWeighted(self, batch_size):
-        heap = [[] for i in range(self.n_clusters)]
+        heap = []
         batch_data = []
         if not self.is_lossNet:
             self.LossPred = LossPred(self.n_features)
             self.is_build = True
         for data_id in range(self.n_maxexps):
-            center_id, center_dis = self.dis2selfcenter(self.memory[data_id])
             loss = self.LossPred.pred(torch.FloatTensor(self.memory[data_id]))
-            heapq.heappush(heap[center_id], (-loss.item(), data_id))
+            heapq.heappush(heap, (-loss.item(), data_id))
         i = 0
         t = 0
         while i < batch_size:
-            if len(heap[t%self.n_clusters])==0:
-                t += 1
-                continue
-            select_data = heapq.heappop(heap[t%self.n_clusters])
+            select_data = heapq.heappop(heap)
             batch_data.append(self.memory[select_data[1], :])
             t += 1
             i += 1
@@ -259,6 +268,20 @@ class ExperiencePool:
             i += 1
         return np.array(batch_data)
 
+    def MaxDisSample(self, batch_size):
+        heap = []
+        batch_data = []
+        for i in range(self.n_maxexps):
+            heapq.heappush(heap, (-abs(self.dis[i]), i))
+        i = 0
+        t = 0
+        while i < batch_size:
+            select_data = heapq.heappop(heap)
+            batch_data.append(self.memory[select_data[1], :])
+            t += 1
+            i += 1
+        return np.array(batch_data)
+
     
     # 挑选样本
     def sample(self, batch_size, model, beta=0.9):
@@ -286,11 +309,31 @@ class ExperiencePool:
         elif self.select_mode == "DisSample":
             return self.DisSample(batch_size)
 
+        elif self.select_mode == "MaxDisSample":
+            batch_data = self.MaxDisSample(batch_size)
+            self.toDaggerMem(batch_data)
+            return batch_data
+
+    def npNorm(self, data):
+        return data / np.linalg.norm(data)
+
     def toDaggerMem(self, batch_data):
-        if self.daggerMem.shape[0] < 32:
-            self.daggerMem = batch_data
+        if self.daggerMemNum < 32:
+            self.daggerMemNum = batch_data.shape[0]
+            for data in batch_data:
+                data = self.npNorm(data)
+                print(np.linalg.norm(data))
+            self.e_base = np.mean(batch_data, axis=0)
+            self.e_base = self.npNorm(self.e_base)
         else:
-            self.daggerMem = np.concatenate((self.daggerMem, batch_data))
+            for data in batch_data:
+                data = self.npNorm(data)
+            self.e_base = self.e_base*self.daggerMemNum + np.sum(batch_data, axis=0)
+            self.daggerMemNum += batch_data.shape[0]
+            self.e_base /= self.daggerMemNum
+            self.e_base = self.npNorm(self.e_base)
+        for i in range(self.n_maxexps):
+            self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
         
 
     #def sample(self, batch_size):

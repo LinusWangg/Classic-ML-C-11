@@ -13,7 +13,7 @@ from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=0.002):
+    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=1e-4):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
@@ -25,9 +25,9 @@ class DAgger_Pipeline(object):
         self.optim = torch.optim.Adam(self.learner.parameters(), lr)
         self.loss = nn.MSELoss()
         self.select_mode = select_mode
-        self.lamda = 0.05
+        self.lamda = 0.15
         self.lr = lr
-        self.ExpPool = ExperiencePool(n_features, 5000, 7, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 3000, 7, select_mode)
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -115,7 +115,7 @@ def main(select_mode, init_model):
     n_features = env.observation_space.shape[0]
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
-    var = 0.5
+    var = 0.1
     n_maxstep = 1000
     n_testtime = 1
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
@@ -174,7 +174,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(111, 8)
-    select_mode = ["DisSample"]
+    select_mode = ["Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
