@@ -19,7 +19,10 @@ class ExperiencePool:
             self.memory = np.zeros((self.n_maxexps, n_features))
         elif select_mode == "LossPER":
             self.memory = Memory(n_maxexps)
+        if select_mode == "DisSample":
+            self.dis = np.zeros((self.n_maxexps)) #idx-angle
         self.memory_iter = 0
+        self.e_base = 0
         #self.daggerMem = np.array([[]])
         self.is_build = False
         self.is_lossNet = False
@@ -70,11 +73,30 @@ class ExperiencePool:
                 continue
             self.cluster_mean[id], _ = self.updateMean(data, self.cluster_mean[id], 1 * updateMode)
 
+    def calculate(self, a, b):
+        a = a.reshape(-1, a.shape[0])
+        b = b.reshape(-1, b.shape[0])
+        cos_ = np.dot(a, b.transpose())/(np.linalg.norm(a)*np.linalg.norm(b))
+        arccos2_ = np.arccos(cos_)
+        return arccos2_
+
     # 添加数据
     # 若未建立且未满则直接插入
     # 若建立了则将过时信息删去并调整中心点
     def add(self, data):
-        if self.select_mode != "LossPER":
+        if self.select_mode == "DisSample":
+            self.memory[self.memory_iter] = data
+            if self.is_build:
+                self.dis[self.memory_iter] = self.calculate(data, self.e_base)
+            self.memory_iter += 1
+            if self.memory_iter == self.n_maxexps:
+                self.is_build = True
+                self.e_base = np.mean(self.memory, axis=0)
+                for i in range(self.n_maxexps):
+                    self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
+            self.memory_iter %= self.n_maxexps
+        
+        elif self.select_mode != "LossPER":
             copy = self.memory[self.memory_iter]
             self.memory[self.memory_iter] = data
             self.memory_iter += 1
@@ -93,6 +115,7 @@ class ExperiencePool:
             #    self.updateMeans(data, 1)
             #    self.updateMeans(copy, -1)
             self.memory_iter %= self.n_maxexps
+        
         elif self.select_mode == "LossPER":
             if not self.is_lossNet:
                 self.LossPred = LossPred(self.n_features)
@@ -213,6 +236,29 @@ class ExperiencePool:
     def LossPredTrain(self, data, yhat_loss):
         mean_loss = self.LossPred.train(data, yhat_loss)
         return mean_loss
+
+    def DisSample(self, batch_size):
+        minn = np.min(self.dis)
+        gap = (np.max(self.dis) - np.min(self.dis))/batch_size
+        batch_data = []
+        batch_num = batch_size+2
+        heap = [[] for i in range(batch_num)]
+        for i in range(self.n_maxexps):
+            dist = self.dis[i] - minn
+            index = int(dist // gap)
+            heapq.heappush(heap[index], (-dist, i))
+        i = 0
+        t = 0
+        while i < batch_size:
+            if len(heap[t%batch_num])==0:
+                t += 1
+                continue
+            select_data = heapq.heappop(heap[t%batch_num])
+            batch_data.append(self.memory[select_data[1], :])
+            t += 1
+            i += 1
+        return np.array(batch_data)
+
     
     # 挑选样本
     def sample(self, batch_size, model, beta=0.9):
@@ -236,6 +282,9 @@ class ExperiencePool:
 
         elif self.select_mode == "LossPER":
             return self.LossPER(batch_size)
+        
+        elif self.select_mode == "DisSample":
+            return self.DisSample(batch_size)
 
     def toDaggerMem(self, batch_data):
         if self.daggerMem.shape[0] < 32:

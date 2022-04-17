@@ -32,4 +32,4 @@ def draw_pic(log_path, eps):
 
 
 if __name__ == '__main__':
-    draw_pic("log-"+game_name+".json", 0.995)
+    draw_pic("log-"+game_name+".json", 0.95)

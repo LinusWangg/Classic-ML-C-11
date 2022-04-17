@@ -144,8 +144,8 @@ def main(select_mode, init_model):
                 
                 s = s_
         mean_r /= n_testtime
-        path = '/models/'+game_name+'/'+select_mode
-        torch.save(pipeline.learner.state_dict(), 'models/'+game_name+'/'+select_mode+'/'+'Dagger'+str(epoch)+'.pth')
+        #path = '/models/'+game_name+'/'+select_mode
+        #torch.save(pipeline.learner.state_dict(), 'models/'+game_name+'/'+select_mode+'/'+'Dagger'+str(epoch)+'.pth')
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
         actNet_loss = 0
         selectNet_loss = 0
@@ -174,7 +174,7 @@ def save_log(log_file, file_path):
 if __name__ == '__main__':
     np.random.seed(1)
     init_model = Learner(111, 8)
-    select_mode = ["Random"]
+    select_mode = ["DisSample"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
