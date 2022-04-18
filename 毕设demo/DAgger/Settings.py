@@ -5,11 +5,11 @@ ParaExchange = 100
 # Critic GAMMA
 GAMMA = 0.9
 # GAME NAME
-game_name = "Ant-v2"
+game_name = "InvertedDoublePendulum-v2"
 # Exp Pool Size
 Exp_Size = 1000
 # Epoch
-epoch_num = 500
+epoch_num = 5000
 # batchsize
 batch_num = 32
 # select_size

@@ -3,14 +3,15 @@ from numpy import dtype
 from Policy import *
 from Qvalue import *
 
-env = gym.make('Ant-v2')
+game_name = "Walker2d-v2"
+env = gym.make(game_name)
 env = env.unwrapped
 #连续
 N_ACTIONS = env.action_space.shape[0]
 #离散
 #N_ACTIONS = 1
 N_STATES = env.observation_space.shape[0]
-MEMORY_CAPACITY = 2000
+MEMORY_CAPACITY = 30000
 BATCH_SIZE = 32
 TAU = 0.005
 LR = 1e-4
@@ -29,13 +30,13 @@ class DDPG(object):
         self.actor_target.load_state_dict(self.actor_eval.state_dict())
         self.critic_target1.load_state_dict(self.critic_eval1.state_dict())
         self.critic_target2.load_state_dict(self.critic_eval2.state_dict())
-        #param = torch.load("Ant-v2_parameters.pth.tar")
-        #self.actor_eval.load_state_dict(param['actor_eval'])
-        #self.actor_target.load_state_dict(param['actor_target'])
-        #self.critic_eval1.load_state_dict(param['critic_eval1'])
-        #self.critic_eval2.load_state_dict(param['critic_eval2'])
-        #self.critic_target1.load_state_dict(param['critic_target1'])
-        #self.critic_target2.load_state_dict(param['critic_target2'])
+        param = torch.load(game_name+"_parameters.pth.tar")
+        self.actor_eval.load_state_dict(param['actor_eval'])
+        self.actor_target.load_state_dict(param['actor_target'])
+        self.critic_eval1.load_state_dict(param['critic_eval1'])
+        self.critic_eval2.load_state_dict(param['critic_eval2'])
+        self.critic_target1.load_state_dict(param['critic_target1'])
+        self.critic_target2.load_state_dict(param['critic_target2'])
         self.actor_opt = torch.optim.Adam(self.actor_eval.parameters(), LR)
         self.critic_opt1 = torch.optim.Adam(self.critic_eval1.parameters(), LR)
         self.critic_opt2 = torch.optim.Adam(self.critic_eval2.parameters(), LR)
@@ -136,7 +137,7 @@ class DDPG(object):
 
 
 
-var = 0.15
+var = 0.3
 a_bound = torch.Tensor(env.action_space.high)
 a_low_bound = torch.Tensor(env.action_space.low)
 ddpg = DDPG(a_bound)
@@ -152,10 +153,10 @@ for i in range(1000000):
                     'critic_eval1':ddpg.critic_eval1.state_dict(),
                     'critic_eval2':ddpg.critic_eval2.state_dict(),
                     'critic_target1':ddpg.critic_target1.state_dict(),
-                    'critic_target2':ddpg.critic_target2.state_dict()}, "Ant-v2_parameters.pth.tar")
+                    'critic_target2':ddpg.critic_target2.state_dict()}, game_name+"_parameters.pth.tar")
     if ddpg.memory_counter > MEMORY_CAPACITY:
         print("Updating", end=" ")
-    for j in range(1000):
+    for j in range(10000):
         #env.render()
         a = ddpg.select_action(s, a_bound)
         a = np.random.normal(a, var)
@@ -179,7 +180,7 @@ for i in range(1000000):
         if ddpg.memory_counter > MEMORY_CAPACITY:
             ddpg.learn()
 
-        if done or j==999:
+        if done or j==1999:
             var *= 0.999
             print('Ep: ', i,
                 '| Ep_r: ', round(ep_r, 2))

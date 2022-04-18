@@ -13,12 +13,12 @@ from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=1e-4):
+    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=1e-3):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions).cuda()
-        parameters = torch.load("毕设demo/parameters/Ant-v2_parameters.pth.tar")
+        parameters = torch.load("毕设demo/parameters/InvertedDoublePendulum-v2_parameters.pth.tar")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
@@ -27,7 +27,7 @@ class DAgger_Pipeline(object):
         self.select_mode = select_mode
         self.lamda = 0.15
         self.lr = lr
-        self.ExpPool = ExperiencePool(n_features, 3000, 7, select_mode)
+        self.ExpPool = ExperiencePool(n_features, 5000, 7, select_mode)
 
     def train(self, batch_size):
         #states = torch.from_numpy(np.array(states))
@@ -48,6 +48,7 @@ class DAgger_Pipeline(object):
             #for s, a in zip(states, actions):
             expert_a = self.expert_action(states).to(torch.float64)
             actions = self.learner.forward(states.float()).to(torch.float64)
+            actions = torch.mul(actions, self.a_bound)
             #expert_a = expert_a.to(torch.float64)
             if self.select_mode == "LossPredict":
                 total_loss = 0
@@ -116,8 +117,9 @@ def main(select_mode, init_model):
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
     var = 0.1
-    n_maxstep = 1000
+    n_maxstep = 2000
     n_testtime = 1
+    n_testtime2 = 5
     pipeline = DAgger_Pipeline(n_features, n_actions, a_bound, init_model, select_mode)
     RENDER = False
     start = 0
@@ -138,7 +140,7 @@ def main(select_mode, init_model):
                 s_, r, done, info = env.step(a)
 
                 ep_r += r
-                if done or j>=n_maxstep-1:
+                if done or j==n_maxstep-1:
                     mean_r += ep_r
                     break
                 
@@ -154,18 +156,40 @@ def main(select_mode, init_model):
             print("Updating", end=" ")
             actNet_loss, selectNet_loss = pipeline.train(batch_num)
             var *= 0.9995
+            #rewards = []
             if start == 0:
                 start = epoch
+            
+            #for i in range(n_testtime2):
+            #    s = env.reset()
+            #    ep_r = 0
+            #    done = False
+            #    for j in range(n_maxstep):
+            #        if RENDER:
+            #            env.render()
+            #        a = pipeline.learner_action(s)
+            #        a = a.numpy()
+
+            #        s_, r, done, info = env.step(a)
+
+            #        ep_r += r
+            #        if done or j>=n_maxstep-1:
+            #            rewards.append(ep_r)
+            #            break
+                    
+            #        s = s_
+            
             WRITER.add_scalar(game_name+'/Reward/'+select_mode, mean_r, epoch-start)
             WRITER.add_scalar(game_name+'/actNetLoss/'+select_mode, actNet_loss, epoch-start)
             WRITER.add_scalar(game_name+'/selectNetLoss/'+select_mode, selectNet_loss, epoch-start)
             WRITER.flush()
             reward_log.append(mean_r)
+            #print(np.mean(rewards), end=" ")
             loss_log.append(actNet_loss)
     
     del pipeline
     
-    return {"reward_log":reward_log, "loss_log":loss_log}
+    return {"reward_log":reward_log}
 
 def save_log(log_file, file_path):
     with open(file_path, "w") as f:
@@ -173,7 +197,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(111, 8)
+    init_model = Learner(11, 1)
     select_mode = ["Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     log = {}
     for mode in select_mode:

@@ -16,4 +16,5 @@ class Learner(nn.Module):
         x = x.cuda()
         x = self.fc1(x)
         x = self.out(x)
+        x = torch.tanh(x)
         return x.cpu()
