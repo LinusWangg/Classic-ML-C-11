@@ -4,6 +4,7 @@ from sklearn.cluster import KMeans
 import torch
 import numpy as np
 import heapq
+import math
 
 from LossNet import LossPred
 from prioritized_memory import Memory
@@ -79,6 +80,8 @@ class ExperiencePool:
         b = b.reshape(-1, b.shape[0])
         cos_ = np.dot(a, b.transpose())/(np.linalg.norm(a)*np.linalg.norm(b))
         arccos2_ = np.arccos(cos_)
+        if math.isnan(arccos2_):
+            return 0
         return arccos2_
 
     # 添加数据

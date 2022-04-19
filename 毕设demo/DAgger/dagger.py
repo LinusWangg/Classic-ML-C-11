@@ -18,7 +18,7 @@ class DAgger_Pipeline(object):
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions).cuda()
-        parameters = torch.load("毕设demo/parameters/InvertedDoublePendulum-v2_parameters.pth.tar")
+        parameters = torch.load("毕设demo/parameters/model2.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
@@ -116,7 +116,7 @@ def main(select_mode, init_model):
     n_features = env.observation_space.shape[0]
     a_low_bound = env.action_space.low
     a_bound = env.action_space.high
-    var = 0.05
+    var = 0.1
     n_maxstep = 1000
     n_testtime = 1
     n_testtime2 = 5
@@ -197,7 +197,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(11, 1)
+    init_model = Learner(2, 1)
     select_mode = ["Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     log = {}
     for mode in select_mode:
