@@ -15,6 +15,7 @@ class Learner(nn.Module):
     def forward(self, x):
         x = x.cuda()
         x = self.fc1(x)
+        x = F.relu(x)
         x = self.out(x)
         x = torch.tanh(x)
         return x.cpu()
