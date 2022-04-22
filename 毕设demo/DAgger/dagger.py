@@ -18,7 +18,7 @@ class DAgger_Pipeline(object):
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions).cuda()
-        parameters = torch.load("毕设demo/parameters/model2.pk1")
+        parameters = torch.load("毕设demo/parameters/model3.pk1")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
@@ -40,17 +40,36 @@ class DAgger_Pipeline(object):
         idxs = []
         weight = []
         if self.select_mode != "LossPER":
-            batch_data = self.ExpPool.sample(batch_size, self.learner)
+            batch_data = self.ExpPool.sample2Dagger(batch_size, self.learner)
         elif self.select_mode == "LossPER":
-            batch_data, idxs, weight = self.ExpPool.sample(batch_size, self.learner)
+            batch_data, idxs, weight = self.ExpPool.sample2Dagger(batch_size, self.learner)
         states = torch.from_numpy(batch_data).to(torch.float32)
+        self.ExpPool.toDaggerMem(batch_data, self.expert_action(states).numpy())
         for i in range(5):
             #for s, a in zip(states, actions):
-            expert_a = self.expert_action(states).to(torch.float64)
-            actions = self.learner.forward(states.float()).to(torch.float64)
-            actions = torch.mul(actions, self.a_bound)
+            batch_data, expert_a = self.ExpPool.sample(batch_size)
+            expert_a = torch.from_numpy(expert_a).to(torch.float64)
+            states = torch.from_numpy(batch_data).to(torch.float32)
+            #expert_a = self.expert_action(states).to(torch.float64)
+            actions = self.learner_action(states.float()).to(torch.float64)
             #expert_a = expert_a.to(torch.float64)
-            if self.select_mode == "LossPredict":
+            if self.select_mode == "DisWeightSample":
+                loss = self.loss(actions, expert_a)
+                actNet_loss += loss.item()
+                self.optim.zero_grad()
+                loss.backward()
+                self.optim.step()
+
+                yhat_loss = []
+                for s in states:
+                    ex_a = self.expert_action(s).detach().to(torch.float64)
+                    lr_a = self.learner(s.float()).detach().to(torch.float64)
+                    loss = nn.MSELoss()
+                    y_hat = loss(lr_a, ex_a).item()
+                    yhat_loss.append([y_hat])
+                selectNet_loss += self.ExpPool.LossPredTrain(batch_data, torch.FloatTensor(yhat_loss))
+
+            elif self.select_mode == "LossPredict":
                 total_loss = 0
                 loss1 = self.loss(actions, expert_a)
                 actNet_loss += loss1.item()
@@ -99,7 +118,7 @@ class DAgger_Pipeline(object):
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
         actions = self.learner.forward(state)
         actions = torch.mul(actions, self.a_bound)
-        return actions[0].detach()
+        return actions[0]
 
     def expert_action(self, state):
         state = torch.from_numpy(np.array(state)).float().unsqueeze(0)
@@ -133,7 +152,7 @@ def main(select_mode, init_model):
                 if RENDER:
                     env.render()
                 a = pipeline.learner_action(s)
-                a = np.clip(np.random.normal(a, var), a_low_bound, a_bound)
+                a = np.clip(np.random.normal(a.detach().numpy(), var), a_low_bound, a_bound)
 
                 pipeline.ExpPool.add(s)
 
@@ -146,8 +165,11 @@ def main(select_mode, init_model):
                 
                 s = s_
         mean_r /= n_testtime
-        #path = '/models/'+game_name+'/'+select_mode
-        #torch.save(pipeline.learner.state_dict(), 'models/'+game_name+'/'+select_mode+'/'+'Dagger'+str(epoch)+'.pth')
+        if epoch % 5 == 0:
+            path = 'models/'+game_name+'/'+select_mode
+            if not os.path.exists(path):
+                os.makedirs(path)
+            torch.save(pipeline.learner.state_dict(), 'models/'+game_name+'/'+select_mode+'/'+'Dagger_'+str(epoch)+'.pth')
         print('Mode: ', select_mode, 'Ep: ', epoch, '| Ep_r: ', round(mean_r, 2))
         actNet_loss = 0
         selectNet_loss = 0
@@ -197,12 +219,12 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(2, 1)
-    select_mode = ["Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
+    init_model = Learner(8, 2)
+    select_mode = ["DisWeightSample", "Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     log = {}
     for mode in select_mode:
         log[mode] = main(mode, init_model)
-    save_log(log, "log2-"+game_name+".json")
+    save_log(log, "log3-"+game_name+".json")
     
     
 

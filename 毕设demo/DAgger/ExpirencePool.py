@@ -20,11 +20,12 @@ class ExperiencePool:
             self.memory = np.zeros((self.n_maxexps, n_features))
         elif select_mode == "LossPER":
             self.memory = Memory(n_maxexps)
-        if select_mode == "DisSample" or select_mode == "MaxDisSample":
+        if select_mode == "DisSample" or select_mode == "MaxDisSample" or select_mode == "DisWeightSample":
             self.dis = np.zeros((self.n_maxexps)) #idx-angle
         self.memory_iter = 0
         self.e_base = 0
         self.daggerMem = np.array([[]])
+        self.expertAction = np.array([[]])
         self.daggerMemNum = 0
         self.is_build = False
         self.is_lossNet = False
@@ -88,7 +89,22 @@ class ExperiencePool:
     # 若未建立且未满则直接插入
     # 若建立了则将过时信息删去并调整中心点
     def add(self, data):
-        if self.select_mode == "DisSample":
+        if self.select_mode == "DisWeightSample":
+            if not self.is_lossNet:
+                self.LossPred = LossPred(self.n_features)
+                self.is_lossNet = True
+            self.memory[self.memory_iter] = data
+            if self.is_build:
+                self.dis[self.memory_iter] = self.calculate(data, self.e_base)
+            self.memory_iter += 1
+            if self.memory_iter == self.n_maxexps:
+                self.is_build = True
+                self.e_base = np.mean(self.memory, axis=0)
+                for i in range(self.n_maxexps):
+                    self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
+            self.memory_iter %= self.n_maxexps
+        
+        elif self.select_mode == "DisSample":
             self.memory[self.memory_iter] = data
             if self.is_build:
                 self.dis[self.memory_iter] = self.calculate(data, self.e_base)
@@ -285,9 +301,31 @@ class ExperiencePool:
             i += 1
         return np.array(batch_data)
 
+    def DisWeightSample(self, batch_size):
+        minn = np.min(self.dis)
+        gap = (np.max(self.dis) - np.min(self.dis))/batch_size
+        batch_data = []
+        batch_num = batch_size+2
+        heap = [[] for i in range(batch_num)]
+        for i in range(self.n_maxexps):
+            dist = self.dis[i] - minn
+            loss = self.LossPred.pred(torch.FloatTensor(self.memory[i]))
+            index = int(dist // gap)
+            heapq.heappush(heap[index], (-loss.item(), i))
+        i = 0
+        t = 0
+        while i < batch_size:
+            if len(heap[t%batch_num])==0:
+                t += 1
+                continue
+            select_data = heapq.heappop(heap[t%batch_num])
+            batch_data.append(self.memory[select_data[1], :])
+            t += 1
+            i += 1
+        return np.array(batch_data)
     
     # 挑选样本
-    def sample(self, batch_size, model, beta=0.9):
+    def sample2Dagger(self, batch_size, model, beta=0.9):
         if self.select_mode == "maxDis2Center":
             return self.maxDis2Center_Sample(batch_size)
         
@@ -314,18 +352,22 @@ class ExperiencePool:
 
         elif self.select_mode == "MaxDisSample":
             batch_data = self.MaxDisSample(batch_size)
-            self.toDaggerMem(batch_data)
             return batch_data
+        
+        elif self.select_mode == "DisWeightSample":
+            return self.DisWeightSample(batch_size)
+
 
     def npNorm(self, data):
         return data / np.linalg.norm(data)
 
-    def toDaggerMem(self, batch_data):
+    def toDaggerMem(self, batch_data, action_data):
         if self.daggerMemNum < 32:
             self.daggerMemNum = batch_data.shape[0]
+            self.daggerMem = batch_data
+            self.expertAction = action_data
             for data in batch_data:
                 data = self.npNorm(data)
-                print(np.linalg.norm(data))
             self.e_base = np.mean(batch_data, axis=0)
             self.e_base = self.npNorm(self.e_base)
         else:
@@ -335,12 +377,15 @@ class ExperiencePool:
             self.daggerMemNum += batch_data.shape[0]
             self.e_base /= self.daggerMemNum
             self.e_base = self.npNorm(self.e_base)
-        for i in range(self.n_maxexps):
-            self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
+            self.daggerMem = np.concatenate((self.daggerMem, batch_data))
+            self.expertAction = np.concatenate((self.expertAction, action_data))
+        if self.select_mode == "DisWeightSample" or self.select_mode == "DisSample" or self.select_mode == "MaxDisSample":
+            for i in range(self.n_maxexps):
+                self.dis[i] = self.calculate(self.memory[i, :], self.e_base)
         
 
-    #def sample(self, batch_size):
-    #    sample_index = np.random.choice(self.daggerMem.shape[0], batch_size)
-    #    return self.daggerMem[sample_index, :]
+    def sample(self, batch_size):
+        sample_index = np.random.choice(self.daggerMem.shape[0], batch_size)
+        return self.daggerMem[sample_index, :], self.expertAction[sample_index, :]
         
  
