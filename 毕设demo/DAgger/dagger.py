@@ -13,12 +13,12 @@ from ExpirencePool import ExperiencePool
 
 class DAgger_Pipeline(object):
     
-    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=1e-2):
+    def __init__(self, n_features, n_actions, a_bound, init_model, select_mode="Random", lr=1e-3):
         self.n_features = n_features
         self.n_actions = n_actions
         self.a_bound = torch.Tensor(a_bound)
         self.expert = Expert(n_features, n_actions).cuda()
-        parameters = torch.load("毕设demo/parameters/model3.pk1")
+        parameters = torch.load("毕设demo/parameters/Ant-v2_parameters.pth.tar")
         self.expert.load_state_dict(parameters['actor_eval'])
         self.learner = Learner(n_features, n_actions).cuda()
         self.learner.load_state_dict(init_model.state_dict())
@@ -219,7 +219,7 @@ def save_log(log_file, file_path):
 
 if __name__ == '__main__':
     np.random.seed(1)
-    init_model = Learner(8, 2)
+    init_model = Learner(111, 8)
     select_mode = ["DisWeightSample", "Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     log = {}
     for mode in select_mode:
