@@ -1,4 +1,2 @@
-import numpy as np
-
-a = np.random.rand(3, 5) 
-print(np.mean(a, axis=1))
+a = [i for i in range(0, 1000, 5)]
+print(a)
