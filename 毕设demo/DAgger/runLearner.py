@@ -14,8 +14,8 @@ def save_log(log_file, file_path):
         f.write(str(log_file))
 
 if __name__ == "__main__":
-    game_name = ['LunarLanderContinuous-v2']
-    run_epoch = [500]
+    game_name = ['Ant-v2', 'HalfCheetah-v2', 'InvertedDoublePendulum-v2']
+    run_epoch = [1000, 1000, 2000]
     mode = ["DisWeightSample", "Random", "LossPER", "DisSample", "MaxDisSample", "LossPredict"]
     eps = [i for i in range(0, 1000, 5)]
     rewards_log = {}
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         n_maxstep = run_epoch[i]
         n_testtime = 5
         rewards_log[game_name[i]] = {}
-        agent = Learner(n_features, n_actions)
+        agent = Learner(n_features, n_actions).cuda()
         for m in mode:
             rewards_log[game_name[i]][m] = []
             for ep in eps:
@@ -58,5 +58,5 @@ if __name__ == "__main__":
                     rewards_log[game_name[i]][m].append(reward)
                 print(game_name[i], " ", m, " ", ep, " MEAN_R=", np.mean(reward))
 
-        save_log(rewards_log, "log2-rewards.json")
+        save_log(rewards_log, "log6-rewards.json")
         
